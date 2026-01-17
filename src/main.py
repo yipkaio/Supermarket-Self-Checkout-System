@@ -17,23 +17,37 @@ from hal import hal_usonic as usonic
 from hal import hal_dc_motor as dc_motor
 from hal import hal_accelerometer as accel
 
-#Empty list to store sequence of keypad presses
+import menu  
+
+# ==============================
+# Menu States (REQ-04)
+# ==============================
+STATE_MENU_1 = 1
+STATE_MENU_2 = 2
+current_state = STATE_MENU_1
+
+# REQ-05 inactivity tracking
+last_key_time = time.time()
+
 shared_keypad_queue = queue.Queue()
 
 
-
-
-#Call back function invoked when any key on keypad is pressed
+# ==============================
+# Keypad callback
+# ==============================
 def key_pressed(key):
     shared_keypad_queue.put(key)
 
 
 def main():
-    #initialization of HAL modules
+    global current_state, last_key_time
+
+    # ==============================
+    # HAL Initialisation
+    # ==============================
     led.init()
     adc.init()
     buzzer.init()
-  
     moisture_sensor.init()
     input_switch.init()
     ir_sensor.init()
@@ -45,143 +59,125 @@ def main():
     accelerometer = accel.init()
 
     keypad.init(key_pressed)
-    keypad_thread = Thread(target=keypad.get_key)
-    keypad_thread.start()
+    Thread(target=keypad.get_key, daemon=True).start()
 
     lcd = LCD.lcd()
     lcd.lcd_clear()
 
-    lcd.lcd_display_string("Mini-Project", 1)
-    lcd.lcd_display_string("Dignostic Tests", 2)
+    # ==============================
+    # REQ-01 System Startup
+    # ==============================
+    menu.startup_screen(lcd)
 
-    time.sleep(3)
+    # REQ-02 Initial Menu
+    menu.menu_page_1(lcd)
 
-    print("press 0 to test accelerometer")
-    print("press 1 to test LED")
-    print("press 2 to test potentiometer")
-    print("press 3 to test buzzer")
-    print("press 4 to test moizture sensor")
-    print("press 5 to test ultrasonic sensor")  
-    print("press 6 to test rfid reader") 
-    print("press 7 to test LDR") 
-    print("press 8 to test servo & DC motor") 
-    print("press 9 to test temp & humidity")   
-    print("press # to test slide switch")  
-    print("print * to test IR sensor")
+    # ==============================
+    # Main Loop
+    # ==============================
+    while True:
 
+        # ==============================
+        # REQ-05 : 30s inactivity reset
+        # ==============================
+        if time.time() - last_key_time > 30:
+            current_state = STATE_MENU_1
+            menu.menu_page_1(lcd)
 
-    while(True):
-        lcd.lcd_clear()
-        lcd.lcd_display_string("press any key!", 1)
-     
+        # ==============================
+        # Non-blocking keypad read
+        # ==============================
+        try:
+            keyvalue = shared_keypad_queue.get(timeout=0.1)
+            last_key_time = time.time()
+        except queue.Empty:
+            continue
 
-        print("wait for key")
-        keyvalue= shared_keypad_queue.get()
+        # ==============================
+        # REQ-06 : '*' anytime → Menu 1
+        # ==============================
+        if keyvalue == "*":
+            current_state = STATE_MENU_1
+            menu.menu_page_1(lcd)
+            continue
 
-        print("key value ", keyvalue)
-        
+        # ==============================
+        # REQ-04 : '#' menu navigation
+        # ==============================
+        if keyvalue == "#":
+            if current_state == STATE_MENU_1:
+                current_state = STATE_MENU_2
+                menu.menu_page_2(lcd)
+            else:
+                current_state = STATE_MENU_1
+                menu.menu_page_1(lcd)
+            continue
 
-        if(keyvalue == 1): 
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            lcd.lcd_display_string("LED TEST ", 2)
+        # ==================================================
+        # Diagnostic / Functional Logic (unchanged)
+        # ==================================================
+        if keyvalue == 1:
+            lcd.lcd_clear()
+            lcd.lcd_display_string("LED TEST", 1)
             led.set_output(1, 1)
             time.sleep(2)
             led.set_output(1, 0)
-            time.sleep(2)
 
-        elif (keyvalue == 2):
-            pot_val = adc.get_adc_value(1)
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            lcd.lcd_display_string("potval " +str(pot_val), 2)
-            time.sleep(2)
+        elif keyvalue == 2:
+            lcd.lcd_clear()
+            val = adc.get_adc_value(1)
+            lcd.lcd_display_string("Pot " + str(val), 1)
 
-        elif (keyvalue == 3):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            lcd.lcd_display_string("Buzzer TEST ", 2)
+        elif keyvalue == 3:
+            lcd.lcd_clear()
+            lcd.lcd_display_string("Buzzer TEST", 1)
             buzzer.beep(0.5, 0.5, 1)
 
-        elif (keyvalue == 4):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            sensor_val = moisture_sensor.read_sensor()
-            lcd.lcd_display_string("moisture " +str(sensor_val), 2)
-            time.sleep(2)
-
-        elif (keyvalue == 5):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)            
-            sensor_val = usonic.get_distance()
-            lcd.lcd_display_string("distance " +str(sensor_val), 2)
-            time.sleep(2)   
-
-        elif (keyvalue == 6):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)           
-            id = reader.read_id_no_block()
-            id = str(id)
-        
-            if id != "None":
-                print("RFID card ID = " + id)
-                # Display RFID card ID on LCD line 2
-                lcd.lcd_display_string(id, 2) 
-            time.sleep(2)   
-
-        elif (keyvalue == 7):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)            
-            pot_val = adc.get_adc_value(0)
-            lcd.lcd_display_string("LDR " +str(pot_val), 2)
-            time.sleep(2)
-
-        elif (keyvalue == 8):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)     
-            lcd.lcd_display_string("servo/DC test ", 2)  
-            servo.set_servo_position(20)
-            time.sleep(1)  
-            servo.set_servo_position(80)
-            time.sleep(1)     
-            servo.set_servo_position(120)
-            time.sleep(1)            
-            dc_motor.set_motor_speed(50)
-            time.sleep(4)   
-            dc_motor.set_motor_speed(0)
-            time.sleep(2) 
-
-        elif (keyvalue == 9):
-            temperature, humidity = temp_humid_sensor.read_temp_humidity()
-            lcd.lcd_display_string("Temperature "  +str(temperature), 1)  
-            lcd.lcd_display_string("Humidity "  +str(humidity), 2) 
-            time.sleep(2)  
-
-        elif (keyvalue == "#"):
-            sw_switch = input_switch.read_slide_switch()
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)    
-            lcd.lcd_display_string("switch "  +str(sw_switch), 2) 
-            time.sleep(2)  
-        
-        elif (keyvalue == "*"):
-            ir_value = ir_sensor.get_ir_sensor_state()
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)    
-            lcd.lcd_display_string("ir sensor "  +str(ir_value), 2) 
-            time.sleep(2)  
-        
-        elif (keyvalue == 0):
-            x_axis, y_axis, z_axis = accelerometer.get_3_axis_adjusted()
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1) 
-            lcd.lcd_display_string("x " +str(x_axis), 2) 
-            time.sleep(2) 
+        elif keyvalue == 4:
             lcd.lcd_clear()
-            lcd.lcd_display_string("y " +str(y_axis), 1) 
-            lcd.lcd_display_string("z " +str(z_axis), 2) 
-            print(x_axis)
-            print(y_axis)
-            print(z_axis)  
+            val = moisture_sensor.read_sensor()
+            lcd.lcd_display_string("Moisture", 1)
+            lcd.lcd_display_string(str(val), 2)
 
-            time.sleep(2)  
-       
+        elif keyvalue == 5:
+            lcd.lcd_clear()
+            dist = usonic.get_distance()
+            lcd.lcd_display_string("Distance", 1)
+            lcd.lcd_display_string(str(dist), 2)
+
+        elif keyvalue == 6:
+            lcd.lcd_clear()
+            card_id = reader.read_id_no_block()
+            if card_id:
+                lcd.lcd_display_string("RFID ID", 1)
+                lcd.lcd_display_string(str(card_id), 2)
+            else:
+                menu.scanner_error(lcd)
+
+        elif keyvalue == 7:
+            lcd.lcd_clear()
+            ldr = adc.get_adc_value(0)
+            lcd.lcd_display_string("LDR", 1)
+            lcd.lcd_display_string(str(ldr), 2)
+
+        elif keyvalue == 8:
+            lcd.lcd_clear()
+            lcd.lcd_display_string("Servo / DC", 1)
+            servo.set_servo_position(90)
+            dc_motor.set_motor_speed(50)
+            time.sleep(2)
+            dc_motor.set_motor_speed(0)
+
+        elif keyvalue == 9:
+            lcd.lcd_clear()
+            t, h = temp_humid_sensor.read_temp_humidity()
+            lcd.lcd_display_string("T:" + str(t), 1)
+            lcd.lcd_display_string("H:" + str(h), 2)
+
+        else:
+            # REQ-07 Invalid input
+            menu.invalid_input(lcd)
 
 
-        time.sleep(1)
-
-
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
