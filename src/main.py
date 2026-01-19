@@ -17,171 +17,203 @@ from hal import hal_usonic as usonic
 from hal import hal_dc_motor as dc_motor
 from hal import hal_accelerometer as accel
 
-#Empty list to store sequence of keypad presses
+import menu
+
+# ==============================
+# States
+# ==============================
+STATE_MENU_1 = 1
+STATE_MENU_2 = 2
+STATE_ONLINE_PICKUP = 3
+STATE_IN_STORE = 4
+STATE_ADMIN_LOGIN = 5
+
 shared_keypad_queue = queue.Queue()
 
-
-
-
-#Call back function invoked when any key on keypad is pressed
+# ==============================
+# Keypad callback
+# ==============================
 def key_pressed(key):
+    print("KEY PRESSED:", key)  # keep debug for now
     shared_keypad_queue.put(key)
 
+# ==============================
+# Simple placeholder pages
+# ==============================
+def show_online_pickup_page(lcd):
+    lcd.lcd_clear()
+    lcd.lcd_display_string("Online Pickup", 1)
+    lcd.lcd_display_string("Scan QR...", 2)
+
+def show_in_store_page(lcd):
+    lcd.lcd_clear()
+    lcd.lcd_display_string("Scan Item", 1)
+    lcd.lcd_display_string("# to Finish", 2)
+
+def show_admin_login_page(lcd):
+    lcd.lcd_clear()
+    lcd.lcd_display_string("Admin Login", 1)
+    lcd.lcd_display_string("Enter PIN", 2)
+
+# ==============================
+# Helper for invalid handling (REQ-07/08)
+# ==============================
+def handle_invalid(lcd, current_state, scanner_available, invalid_count):
+    """
+    REQ-07: show invalid input message (2s) and return to current menu/page
+    REQ-08: after 3 invalid inputs -> keypad error -> restart system (REQ-01)
+    Returns: (new_state, new_invalid_count, restarted_bool)
+    """
+    invalid_count += 1
+    menu.invalid_input(lcd)
+
+    if invalid_count >= 3:
+        # REQ-08
+        menu.keypad_error(lcd)
+        menu.startup_screen(lcd)      # restart (REQ-01)
+        menu.menu_page_1(lcd, scanner_available)
+        return (STATE_MENU_1, 0, True)
+
+    # Return user to the correct screen after invalid input
+    if current_state == STATE_MENU_1:
+        menu.menu_page_1(lcd, scanner_available)
+    elif current_state == STATE_MENU_2:
+        menu.menu_page_2(lcd)
+    elif current_state == STATE_ONLINE_PICKUP:
+        show_online_pickup_page(lcd)
+    elif current_state == STATE_IN_STORE:
+        show_in_store_page(lcd)
+    elif current_state == STATE_ADMIN_LOGIN:
+        show_admin_login_page(lcd)
+
+    return (current_state, invalid_count, False)
 
 def main():
-    #initialization of HAL modules
+    # ==============================
+    # Variables
+    # ==============================
+    current_state = STATE_MENU_1
+    last_key_time = time.time()
+    invalid_count = 0
+
+    # REQ-09: scanner availability flag (set False if scanner fails)
+    # For now, keep True unless you detect failure later.
+    scanner_available = True
+
+    # ==============================
+    # HAL init
+    # ==============================
     led.init()
     adc.init()
     buzzer.init()
-  
     moisture_sensor.init()
     input_switch.init()
     ir_sensor.init()
-    reader = rfid_reader.init()
+    rfid_reader.init()
     servo.init()
     temp_humid_sensor.init()
     usonic.init()
     dc_motor.init()
-    accelerometer = accel.init()
+    accel.init()
 
     keypad.init(key_pressed)
-    keypad_thread = Thread(target=keypad.get_key)
-    keypad_thread.start()
+    Thread(target=keypad.get_key, daemon=True).start()
 
     lcd = LCD.lcd()
     lcd.lcd_clear()
 
-    lcd.lcd_display_string("Mini-Project", 1)
-    lcd.lcd_display_string("Dignostic Tests", 2)
+    # REQ-01 startup
+    menu.startup_screen(lcd)
 
-    time.sleep(3)
+    # REQ-02 main menu page 1
+    current_state = STATE_MENU_1
+    menu.menu_page_1(lcd, scanner_available)
+    last_key_time = time.time()
 
-    print("press 0 to test accelerometer")
-    print("press 1 to test LED")
-    print("press 2 to test potentiometer")
-    print("press 3 to test buzzer")
-    print("press 4 to test moizture sensor")
-    print("press 5 to test ultrasonic sensor")  
-    print("press 6 to test rfid reader") 
-    print("press 7 to test LDR") 
-    print("press 8 to test servo & DC motor") 
-    print("press 9 to test temp & humidity")   
-    print("press # to test slide switch")  
-    print("print * to test IR sensor")
+    while True:
+        # REQ-05 inactivity -> menu page 1
+        if time.time() - last_key_time > 30:
+            if current_state != STATE_MENU_1:
+                current_state = STATE_MENU_1
+                invalid_count = 0
+                menu.menu_page_1(lcd, scanner_available)
 
+        # Non-blocking keypad read
+        try:
+            keyvalue = shared_keypad_queue.get(timeout=0.1)
+            last_key_time = time.time()
+        except queue.Empty:
+            continue
 
-    while(True):
-        lcd.lcd_clear()
-        lcd.lcd_display_string("press any key!", 1)
-     
+        # REQ-06 '*' anytime -> menu page 1
+        if keyvalue == "*":
+            current_state = STATE_MENU_1
+            invalid_count = 0
+            menu.menu_page_1(lcd, scanner_available)
+            continue
 
-        print("wait for key")
-        keyvalue= shared_keypad_queue.get()
+        # REQ-04 '#' toggle menu pages; if in other states, treat as back to menu
+        if keyvalue == "#":
+            invalid_count = 0
+            if current_state == STATE_MENU_1:
+                current_state = STATE_MENU_2
+                menu.menu_page_2(lcd)
+            elif current_state == STATE_MENU_2:
+                current_state = STATE_MENU_1
+                menu.menu_page_1(lcd, scanner_available)
+            else:
+                current_state = STATE_MENU_1
+                menu.menu_page_1(lcd, scanner_available)
+            continue
 
-        print("key value ", keyvalue)
-        
+        # ==============================
+        # Handle according to current state
+        # ==============================
 
-        if(keyvalue == 1): 
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            lcd.lcd_display_string("LED TEST ", 2)
-            led.set_output(1, 1)
-            time.sleep(2)
-            led.set_output(1, 0)
-            time.sleep(2)
+        # MENU PAGE 1 (REQ-02)
+        if current_state == STATE_MENU_1:
+            if keyvalue == 1:
+                if not scanner_available:
+                    # REQ-09: online pickup disabled
+                    menu.scanner_error(lcd)
+                    menu.menu_page_1(lcd, scanner_available)
+                    continue
 
-        elif (keyvalue == 2):
-            pot_val = adc.get_adc_value(1)
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            lcd.lcd_display_string("potval " +str(pot_val), 2)
-            time.sleep(2)
+                invalid_count = 0
+                current_state = STATE_ONLINE_PICKUP
+                show_online_pickup_page(lcd)
+                continue
 
-        elif (keyvalue == 3):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            lcd.lcd_display_string("Buzzer TEST ", 2)
-            buzzer.beep(0.5, 0.5, 1)
+            elif keyvalue == 2:
+                invalid_count = 0
+                current_state = STATE_IN_STORE
+                show_in_store_page(lcd)
+                continue
 
-        elif (keyvalue == 4):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)
-            sensor_val = moisture_sensor.read_sensor()
-            lcd.lcd_display_string("moisture " +str(sensor_val), 2)
-            time.sleep(2)
+            else:
+                current_state, invalid_count, _ = handle_invalid(
+                    lcd, current_state, scanner_available, invalid_count
+                )
+                continue
 
-        elif (keyvalue == 5):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)            
-            sensor_val = usonic.get_distance()
-            lcd.lcd_display_string("distance " +str(sensor_val), 2)
-            time.sleep(2)   
+        # MENU PAGE 2 (REQ-03)
+        if current_state == STATE_MENU_2:
+            if keyvalue == 3:
+                invalid_count = 0
+                current_state = STATE_ADMIN_LOGIN
+                show_admin_login_page(lcd)
+                continue
+            else:
+                current_state, invalid_count, _ = handle_invalid(
+                    lcd, current_state, scanner_available, invalid_count
+                )
+                continue
 
-        elif (keyvalue == 6):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)           
-            id = reader.read_id_no_block()
-            id = str(id)
-        
-            if id != "None":
-                print("RFID card ID = " + id)
-                # Display RFID card ID on LCD line 2
-                lcd.lcd_display_string(id, 2) 
-            time.sleep(2)   
+        # OTHER STATES (placeholders)
+        # If user presses unexpected keys here, count as invalid attempt
+        current_state, invalid_count, _ = handle_invalid(
+            lcd, current_state, scanner_available, invalid_count
+        )
 
-        elif (keyvalue == 7):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)            
-            pot_val = adc.get_adc_value(0)
-            lcd.lcd_display_string("LDR " +str(pot_val), 2)
-            time.sleep(2)
-
-        elif (keyvalue == 8):
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)     
-            lcd.lcd_display_string("servo/DC test ", 2)  
-            servo.set_servo_position(20)
-            time.sleep(1)  
-            servo.set_servo_position(80)
-            time.sleep(1)     
-            servo.set_servo_position(120)
-            time.sleep(1)            
-            dc_motor.set_motor_speed(50)
-            time.sleep(4)   
-            dc_motor.set_motor_speed(0)
-            time.sleep(2) 
-
-        elif (keyvalue == 9):
-            temperature, humidity = temp_humid_sensor.read_temp_humidity()
-            lcd.lcd_display_string("Temperature "  +str(temperature), 1)  
-            lcd.lcd_display_string("Humidity "  +str(humidity), 2) 
-            time.sleep(2)  
-
-        elif (keyvalue == "#"):
-            sw_switch = input_switch.read_slide_switch()
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)    
-            lcd.lcd_display_string("switch "  +str(sw_switch), 2) 
-            time.sleep(2)  
-        
-        elif (keyvalue == "*"):
-            ir_value = ir_sensor.get_ir_sensor_state()
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1)    
-            lcd.lcd_display_string("ir sensor "  +str(ir_value), 2) 
-            time.sleep(2)  
-        
-        elif (keyvalue == 0):
-            x_axis, y_axis, z_axis = accelerometer.get_3_axis_adjusted()
-            lcd.lcd_display_string("key pressed "  +str(keyvalue), 1) 
-            lcd.lcd_display_string("x " +str(x_axis), 2) 
-            time.sleep(2) 
-            lcd.lcd_clear()
-            lcd.lcd_display_string("y " +str(y_axis), 1) 
-            lcd.lcd_display_string("z " +str(z_axis), 2) 
-            print(x_axis)
-            print(y_axis)
-            print(z_axis)  
-
-            time.sleep(2)  
-       
-
-
-        time.sleep(1)
-
-
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
