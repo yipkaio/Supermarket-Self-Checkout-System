@@ -1,10 +1,10 @@
 import time
 
+
 # REQ-01 : System Startup
 
 def startup_screen(lcd):
     """
-    REQ-01
     On power ON, LCD displays 'Loading..' for 2 seconds
     """
     lcd.lcd_clear()
@@ -17,9 +17,7 @@ def startup_screen(lcd):
 
 def menu_page_1(lcd, scanner_available=True):
     """
-    REQ-02 & REQ-09
-    Display Main Menu Page 1.
-    Online Pickup option is disabled if scanner fails.
+    Display Main Menu Page 1
     """
     lcd.lcd_clear()
 
@@ -36,8 +34,7 @@ def menu_page_1(lcd, scanner_available=True):
 
 def menu_page_2(lcd):
     """
-    REQ-03
-    Display Admin menu page
+    Display Admin Menu
     """
     lcd.lcd_clear()
     lcd.lcd_display_string("3.Admin Login", 1)
@@ -48,10 +45,6 @@ def menu_page_2(lcd):
 # REQ-07 : Invalid Input
 
 def invalid_input(lcd):
-    """
-    REQ-07
-    Display invalid input message for 2 seconds
-    """
     lcd.lcd_clear()
     lcd.lcd_display_string("Invalid Input", 1)
     lcd.lcd_display_string("Try Again", 2)
@@ -62,25 +55,17 @@ def invalid_input(lcd):
 # REQ-08 : Keypad Error
 
 def keypad_error(lcd):
-    """
-    REQ-08
-    Display keypad error and restart message
-    """
     lcd.lcd_clear()
     lcd.lcd_display_string("Keypad Error", 1)
-    lcd.lcd_display_string("Restarting...", 2)
-    time.sleep(2)
+    lcd.lcd_display_string("Restarting", 2)
+    time.sleep(1)
 
 
-# ==================================================
+
 # REQ-09 : Scanner Error
-# ==================================================
+
 def scanner_error(lcd):
-    """
-    REQ-09
-    Display scanner unavailable message
-    """
     lcd.lcd_clear()
     lcd.lcd_display_string("Scanner Error", 1)
     lcd.lcd_display_string("Unavailable", 2)
-    time.sleep(2)
+    time.sleep(1)
