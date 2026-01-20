@@ -29,17 +29,18 @@ def show_inventory():
 
     print("\n=== INVENTORY ===")
     print("ID | Name | Price | Stock")
-    print("-" * 35)
+    print("-" * 40)
 
-    for row in cur.fetchall():
-        print(row)
+    for product_id, name, price, inventory in cur.fetchall():
+        print(f"{product_id} | {name} | ${float(price):.2f} | {inventory}")
 
     conn.close()
+
 
 # ---------- ADD NEW PRODUCT ----------
 def add_product():
     name = input("Product name: ")
-    price = float(input("Price: "))
+    price = input("Price: ")
     inventory = int(input("Inventory quantity: "))
 
     conn = get_connection()
@@ -58,7 +59,8 @@ def add_product():
 
     print(f"Product added successfully (ID: {product_id})")
 
-# ---------- UPDATE INVENTORY ----------
+
+# ---------- UPDATE INVENTORY (SET VALUE) ----------
 def update_inventory():
     product_id = int(input("Enter product ID: "))
     new_inventory = int(input("Enter new inventory value: "))
@@ -72,11 +74,16 @@ def update_inventory():
     )
 
     conn.commit()
+
+    if cur.rowcount == 0:
+        print("No such product found.")
+    else:
+        print("Inventory updated successfully.")
+
     conn.close()
 
-    print("Inventory updated successfully")
 
-# ---------- ADJUST INVENTORY ----------
+# ---------- ADJUST INVENTORY (+ / -) ----------
 def adjust_inventory():
     product_id = int(input("Enter product ID: "))
     change = int(input("Enter change (+ add, - reduce): "))
@@ -90,9 +97,37 @@ def adjust_inventory():
     )
 
     conn.commit()
+
+    if cur.rowcount == 0:
+        print("No such product found.")
+    else:
+        print("Inventory adjusted successfully.")
+
     conn.close()
 
-    print("Inventory adjusted successfully")
+
+# ---------- DELETE PRODUCT ----------
+def delete_product():
+    product_id = int(input("Enter product ID to delete: "))
+
+    confirm = input(f"Are you sure you want to delete product {product_id}? (y/n): ").lower()
+    if confirm != "y":
+        print("Delete cancelled.")
+        return
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
+    conn.commit()
+
+    if cur.rowcount == 0:
+        print("No such product found. Nothing deleted.")
+    else:
+        print("Product deleted successfully.")
+
+    conn.close()
+
 
 # ---------- MAIN MENU ----------
 def main():
@@ -102,7 +137,8 @@ def main():
         print("2. Add new product")
         print("3. Update inventory (set value)")
         print("4. Adjust inventory (+ / -)")
-        print("5. Exit")
+        print("5. Delete product")
+        print("6. Exit")
 
         choice = input("Choose option: ")
 
@@ -115,10 +151,13 @@ def main():
         elif choice == "4":
             adjust_inventory()
         elif choice == "5":
+            delete_product()
+        elif choice == "6":
             print("Goodbye")
             break
         else:
             print("Invalid choice")
+
 
 # ---------- RUN ----------
 if __name__ == "__main__":
