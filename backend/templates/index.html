@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supermarket</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .products {
+            max-width: 600px;
+            margin: auto;
+        }
+
+        .product {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🛒 Supermarket Items</h1>
+
+<div class="products">
+    {% for p in products %}
+        <div class="product">
+            <div>
+                <strong>{{ p.name }}</strong><br>
+                Stock: {{ p.stock }}
+            </div>
+            <div>
+                ${{ p.price }}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>
