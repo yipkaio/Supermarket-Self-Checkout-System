@@ -1,5 +1,6 @@
-from flask import Flask, jsonify, request,render_template
+from flask import Flask, render_template, request, redirect, url_for
 import mysql.connector
+
 
 app = Flask(__name__)
 
@@ -26,7 +27,7 @@ def home():
     return render_template("index.html", products=products)
 
 def get_products():
-    conn = get_db_connection
+    conn = get_db_connection()
 
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM products")
@@ -40,14 +41,13 @@ def get_products():
 
 @app.route("/add-product", methods=["POST"])
 def add_product():
-    data = request.json
+    data = request.json  # because the form uses AJAX JSON
 
     name = data["name"]
     price = data["price"]
     stock = data["stock"]
 
-    conn = get_db_connection
-
+    conn = get_db_connection()  # <-- parentheses added
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO products (name, price, stock) VALUES (%s, %s, %s)",
@@ -60,6 +60,24 @@ def add_product():
 
     return jsonify({"message": "Product added successfully"})
 
+
+
+@app.route("/update-stock", methods=["POST"])
+def update_stock():
+    product_id = request.form["product_id"]
+    new_stock = request.form["stock"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE products SET stock = %s WHERE product_id = %s",
+        (new_stock, product_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for("home"))
 
 @app.route("/checkout", methods=["POST"])
 def checkout():

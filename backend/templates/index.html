@@ -1,50 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Supermarket</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            padding: 40px;
-        }
-
-        h1 {
-            text-align: center;
-        }
-
-        .products {
-            max-width: 600px;
-            margin: auto;
-        }
-
-        .product {
-            background: white;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
-<h1>🛒 Supermarket Items</h1>
+<h1>🛒 Supermarket Management</h1>
 
-<div class="products">
+<div class="container">
+
+    <!-- Add New Product -->
+    <div class="add-product">
+        <h2>Add Product:</h2>
+        <form id="addProductForm">
+            <input type="text" name="name" placeholder="Name" required>
+            <input type="number" name="price" placeholder="Price" step="0.01" required>
+            <input type="number" name="stock" placeholder="Stock" required>
+            <button type="submit">Add</button>
+        </form>
+    </div>
+
+    <!-- List of Products -->
     {% for p in products %}
-        <div class="product">
-            <div>
-                <strong>{{ p.name }}</strong><br>
+    <div class="product">
+        <div>
+            <div class="product-title">{{ p.name }}</div>
+            <div class="product-info">
+                Price: ${{ p.price }}<br>
                 Stock: {{ p.stock }}
             </div>
-            <div>
-                ${{ p.price }}
-            </div>
         </div>
+
+        <!-- Update Stock Form -->
+        <form method="POST" action="/update-stock">
+            <input type="hidden" name="product_id" value="{{ p.product_id }}">
+            <input type="number" name="stock" value="{{ p.stock }}" min="0" required>
+            <button type="submit">Update Stock</button>
+        </form>
+    </div>
     {% endfor %}
+
 </div>
+
+<script>
+    // Handle Add Product via AJAX
+    const form = document.getElementById("addProductForm");
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const data = {
+            name: form.name.value,
+            price: parseFloat(form.price.value),
+            stock: parseInt(form.stock.value)
+        };
+
+        const response = await fetch("/add-product", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        alert(result.message);
+
+        // Refresh page to show new product
+        window.location.reload();
+    });
+</script>
 
 </body>
 </html>
