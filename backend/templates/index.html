@@ -1,75 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Supermarket</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body>
+<h1>Company Inventory</h1>
+<a href="/logout">Logout</a>
 
-<h1>🛒 Supermarket Management</h1>
+<form method="POST" action="/add-product" enctype="multipart/form-data" class="card">
+    <h3>Add Product</h3>
+    <input name="name" placeholder="Name" required>
+    <input name="price" placeholder="Price" required>
+    <input name="stock" placeholder="Stock" required>
+    <input type="file" name="image" required>
+    <button>Add</button>
+</form>
 
-<div class="container">
-
-    <!-- Add New Product -->
-    <div class="add-product">
-        <h2>Add Product:</h2>
-        <form id="addProductForm">
-            <input type="text" name="name" placeholder="Name" required>
-            <input type="number" name="price" placeholder="Price" step="0.01" required>
-            <input type="number" name="stock" placeholder="Stock" required>
-            <button type="submit">Add</button>
-        </form>
-    </div>
-
-    <!-- List of Products -->
-    {% for p in products %}
-    <div class="product">
-        <div>
-            <div class="product-title">{{ p.name }}</div>
-            <div class="product-info">
-                Price: ${{ p.price }}<br>
-                Stock: {{ p.stock }}
-            </div>
-        </div>
-
-        <!-- Update Stock Form -->
-        <form method="POST" action="/update-stock">
-            <input type="hidden" name="product_id" value="{{ p.product_id }}">
-            <input type="number" name="stock" value="{{ p.stock }}" min="0" required>
-            <button type="submit">Update Stock</button>
-        </form>
-    </div>
-    {% endfor %}
-
+<div class="grid">
+{% for p in products %}
+<div class="product">
+    {% if p.image %}
+    <img src="{{ url_for('static', filename='images/uploads/' + p.image) }}">
+    {% endif %}
+    <h3>{{ p.name }}</h3>
+    <p>Price: ${{ p.price }}</p>
+    <p>Stock: {{ p.stock }}</p>
+    <a href="/edit/{{ p.product_id }}">Edit</a>
 </div>
-
-<script>
-    // Handle Add Product via AJAX
-    const form = document.getElementById("addProductForm");
-    form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-
-        const data = {
-            name: form.name.value,
-            price: parseFloat(form.price.value),
-            stock: parseInt(form.stock.value)
-        };
-
-        const response = await fetch("/add-product", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-        alert(result.message);
-
-        // Refresh page to show new product
-        window.location.reload();
-    });
-</script>
-
+{% endfor %}
+</div>
 </body>
 </html>

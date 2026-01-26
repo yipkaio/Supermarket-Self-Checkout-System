@@ -1,8 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 import mysql.connector
-
+import os
 
 app = Flask(__name__)
+app.secret_key = "super_secret_company_key"
+
+UPLOAD_FOLDER = "static/images/uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 def get_db_connection():
     return mysql.connector.connect(
@@ -14,10 +18,42 @@ def get_db_connection():
         auth_plugin="mysql_native_password"
     )
 
+# ---------------- LOGIN ----------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
 
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM users WHERE username=%s AND password=%s",
+            (username, password)
+        )
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
 
+        if user:
+            session["logged_in"] = True
+            return redirect(url_for("home"))
+        else:
+            return render_template("login.html", error="Invalid credentials")
+
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+# ---------------- PROTECTED HOME ----------------
 @app.route("/")
 def home():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM products")
@@ -26,52 +62,22 @@ def home():
     conn.close()
     return render_template("index.html", products=products)
 
-def get_products():
-    conn = get_db_connection()
-
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM products")
-    products = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    return jsonify(products)
-
-
+# ---------------- ADD PRODUCT ----------------
 @app.route("/add-product", methods=["POST"])
 def add_product():
-    data = request.json  # because the form uses AJAX JSON
+    name = request.form["name"]
+    price = request.form["price"]
+    stock = request.form["stock"]
+    image = request.files["image"]
 
-    name = data["name"]
-    price = data["price"]
-    stock = data["stock"]
-
-    conn = get_db_connection()  # <-- parentheses added
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO products (name, price, stock) VALUES (%s, %s, %s)",
-        (name, price, stock)
-    )
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return jsonify({"message": "Product added successfully"})
-
-
-
-@app.route("/update-stock", methods=["POST"])
-def update_stock():
-    product_id = request.form["product_id"]
-    new_stock = request.form["stock"]
+    filename = image.filename
+    image.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
 
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE products SET stock = %s WHERE product_id = %s",
-        (new_stock, product_id)
+        "INSERT INTO products (name, price, stock, image) VALUES (%s,%s,%s,%s)",
+        (name, price, stock, filename)
     )
     conn.commit()
     cursor.close()
@@ -79,74 +85,32 @@ def update_stock():
 
     return redirect(url_for("home"))
 
-@app.route("/checkout", methods=["POST"])
-def checkout():
-    data = request.json
-    items = data["items"]
+# ---------------- EDIT PRICE & STOCK ----------------
+@app.route("/edit/<int:product_id>", methods=["GET", "POST"])
+def edit_product(product_id):
+    if request.method == "POST":
+        price = request.form["price"]
+        stock = request.form["stock"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE products SET price=%s, stock=%s WHERE product_id=%s",
+            (price, stock, product_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return redirect(url_for("home"))
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    total = 0
-
-    # Check stock and calculate total amount spend 
-    for item in items:
-        cursor.execute(
-            "SELECT price, stock FROM products WHERE product_id = %s",
-            (item["product_id"],)
-        )
-        product = cursor.fetchone()
-
-        if product is None:
-            return jsonify({"error": "Product not found"}), 400
-
-        if product["stock"] < item["quantity"]:
-            return jsonify({"error": "Insufficient stock"}), 400
-
-        total += product["price"] * item["quantity"]
-
-    # create transaction
-    cursor.execute(
-        "INSERT INTO transactions (total) VALUES (%s)",
-        (total,)
-    )
-    transaction_id = cursor.lastrowid
-
-    # save item and update stock 
-    for item in items:
-        cursor.execute(
-            "SELECT price FROM products WHERE product_id = %s",
-            (item["product_id"],)
-        )
-        price = cursor.fetchone()["price"]
-
-        cursor.execute(
-            """
-            INSERT INTO transaction_items
-            (transaction_id, product_id, quantity, price_at_purchase)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (transaction_id, item["product_id"], item["quantity"], price)
-        )
-
-        cursor.execute(
-            "UPDATE products SET stock = stock - %s WHERE product_id = %s",
-            (item["quantity"], item["product_id"])
-        )
-
-    conn.commit()
+    cursor.execute("SELECT * FROM products WHERE product_id=%s", (product_id,))
+    product = cursor.fetchone()
     cursor.close()
     conn.close()
 
-    return jsonify({
-        "message": "Checkout successful",
-        "transaction_id": transaction_id,
-        "total": total
-    })
-
-
+    return render_template("edit.html", product=product)
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
