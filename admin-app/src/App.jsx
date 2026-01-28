@@ -120,57 +120,89 @@ function App() {
     e.preventDefault();
     setLoading(true);
 
+    console.log("🔄 Updating product:", editingProduct.product_id);
+    console.log("📝 New values:", editForm);
+
     try {
       const response = await fetch(
         `${API_URL}/products/${editingProduct.product_id}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editForm),
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            price: parseFloat(editForm.price),
+            stock: parseInt(editForm.stock),
+          }),
         },
       );
 
+      console.log("📡 Response status:", response.status);
+
       const data = await response.json();
+      console.log("📦 Response data:", data);
 
       if (response.ok && data.success) {
         showNotification("✅ Product updated in database!");
-        await fetchProducts();
+        await fetchProducts(); // Reload from database
         setEditingProduct(null);
         setEditForm({ price: "", stock: "" });
       } else {
+        console.error("❌ Update failed:", data);
         showNotification(data.error || "Failed to update product", "error");
       }
-    } catch {
-      showNotification("Failed to update product", "error");
+    } catch (error) {
+      console.error("❌ Update error:", error);
+      showNotification(`Failed to update: ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteProduct = async (id, name) => {
-    if (!window.confirm(`Delete "${name}"?`)) return;
+  const handleDeleteProduct = async (productId, productName) => {
+    console.log("🗑️ Delete requested for:", productId, productName);
+
+    if (
+      !window.confirm(
+        `⚠️ Delete "${productName}"?\n\nThis will permanently remove it from the database.`,
+      )
+    ) {
+      console.log("❌ Delete cancelled by user");
+      return;
+    }
 
     setLoading(true);
+    console.log("🔄 Deleting product ID:", productId);
+
     try {
-      const response = await fetch(`${API_URL}/products/${id}`, {
+      const response = await fetch(`${API_URL}/products/${productId}`, {
         method: "DELETE",
+        headers: {
+          Accept: "application/json",
+        },
       });
 
+      console.log("📡 Delete response status:", response.status);
+
       const data = await response.json();
+      console.log("📦 Delete response data:", data);
 
       if (response.ok && data.success) {
         showNotification("🗑️ Product deleted from database!");
-        await fetchProducts();
+        await fetchProducts(); // Reload from database
       } else {
+        console.error("❌ Delete failed:", data);
         showNotification(data.error || "Failed to delete product", "error");
       }
-    } catch {
-      showNotification("Failed to delete product", "error");
+    } catch (error) {
+      console.error("❌ Delete error:", error);
+      showNotification(`Failed to delete: ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
   };
-
   const startEdit = (product) => {
     setEditingProduct(product);
     setEditForm({ price: product.price, stock: product.stock });
@@ -226,10 +258,12 @@ function App() {
             <input
               type="number"
               step="0.01"
+              min="0"
               value={editForm.price}
               onChange={(e) =>
                 setEditForm({ ...editForm, price: e.target.value })
               }
+              required
             />
           </label>
 
@@ -237,10 +271,12 @@ function App() {
             Stock Quantity
             <input
               type="number"
+              min="0"
               value={editForm.stock}
               onChange={(e) =>
                 setEditForm({ ...editForm, stock: e.target.value })
               }
+              required
             />
           </label>
 
