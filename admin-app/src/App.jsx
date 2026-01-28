@@ -11,7 +11,7 @@ function App() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-
+  const [searchTerm, setSearchTerm] = useState("");
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   const [newProduct, setNewProduct] = useState({
@@ -212,33 +212,36 @@ function App() {
   if (!isLoggedIn) {
     return (
       <div className="login-page">
-        <h1>🏪 Inventory System</h1>
-        <p>Login to manage products</p>
+        <div className="login-box">
+          <h1>🏪 Inventory System</h1>
+          <p className="subtitle">Login to manage products</p>
 
-        <form onSubmit={handleLogin}>
-          <input
-            type="text"
-            placeholder="Username"
-            value={loginForm.username}
-            onChange={(e) =>
-              setLoginForm({ ...loginForm, username: e.target.value })
-            }
-          />
+          <form onSubmit={handleLogin}>
+            <input
+              type="text"
+              placeholder="Username"
+              value={loginForm.username}
+              onChange={(e) =>
+                setLoginForm({ ...loginForm, username: e.target.value })
+              }
+            />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={loginForm.password}
-            onChange={(e) =>
-              setLoginForm({ ...loginForm, password: e.target.value })
-            }
-          />
+            <input
+              type="password"
+              placeholder="Password"
+              value={loginForm.password}
+              onChange={(e) =>
+                setLoginForm({ ...loginForm, password: e.target.value })
+              }
+            />
 
-          <button type="submit">{loading ? "Logging in..." : "Login"}</button>
-        </form>
+            <button className="btn-primary" type="submit">
+              {loading ? "Logging in..." : "Login"}
+            </button>
+          </form>
 
-        {loginError && <p className="error">{loginError}</p>}
-        <p>💡 Default: admin / admin123</p>
+          {loginError && <div className="error-box">{loginError}</div>}
+        </div>
       </div>
     );
   }
@@ -247,175 +250,212 @@ function App() {
   if (editingProduct) {
     return (
       <div className="edit-page">
-        {message && <div className={`msg ${message.type}`}>{message.text}</div>}
+        <div className="edit-box">
+          {message && (
+            <div className={`notification ${message.type}`}>{message.text}</div>
+          )}
 
-        <h2>✏️ Edit Product</h2>
-        <h3>{editingProduct.name}</h3>
+          <h2>✏️ Edit Product</h2>
+          <h3>{editingProduct.name}</h3>
 
-        <form onSubmit={handleUpdateProduct}>
-          <label>
-            Price ($)
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={editForm.price}
-              onChange={(e) =>
-                setEditForm({ ...editForm, price: e.target.value })
-              }
-              required
-            />
-          </label>
+          <form onSubmit={handleUpdateProduct}>
+            <div className="form-group">
+              <label>Price ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={editForm.price}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, price: e.target.value })
+                }
+                required
+              />
+            </div>
 
-          <label>
-            Stock Quantity
-            <input
-              type="number"
-              min="0"
-              value={editForm.stock}
-              onChange={(e) =>
-                setEditForm({ ...editForm, stock: e.target.value })
-              }
-              required
-            />
-          </label>
+            <div className="form-group">
+              <label>Stock Quantity</label>
+              <input
+                type="number"
+                value={editForm.stock}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, stock: e.target.value })
+                }
+                required
+              />
+            </div>
 
-          <button type="submit">
-            {loading ? "Saving..." : "Save Changes"}
-          </button>
-
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setEditingProduct(null)}
-          >
-            Cancel
-          </button>
-        </form>
+            <div className="btn-group">
+              <button className="btn-success" type="submit">
+                {loading ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setEditingProduct(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     );
   }
 
   /* ========== MAIN INVENTORY PAGE ========== */
   return (
-    <div className="inventory-page">
-      {message && <div className={`msg ${message.type}`}>{message.text}</div>}
+    <div className="page">
+      <div className="page-content">
+        {message && (
+          <div className={`notification ${message.type}`}>{message.text}</div>
+        )}
 
-      <header>
-        <h1>📦 Company Inventory</h1>
-        <p>{products.length} products in database</p>
+        <header className="header">
+          <div>
+            <h1>📦 Company Inventory</h1>
+            <p className="text-muted">{products.length} products in database</p>
+          </div>
 
-        <button onClick={handleLogout}>
-          <LogOut size={16} /> Logout
-        </button>
-      </header>
+          <div className="header-actions">
+            <input
+              className="search-input"
+              type="text"
+              placeholder="🔍 Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
 
-      {!showAddForm ? (
-        <button className="btn-add" onClick={() => setShowAddForm(true)}>
-          <Plus size={16} /> Add New Product
-        </button>
-      ) : (
-        <form className="add-form" onSubmit={handleAddProduct}>
-          <h2>➕ Add New Product</h2>
+            <button onClick={fetchProducts} className="btn-refresh">
+              <RefreshCw size={16} />
+            </button>
 
-          <input
-            type="text"
-            placeholder="Product Name"
-            value={newProduct.name}
-            onChange={(e) =>
-              setNewProduct({ ...newProduct, name: e.target.value })
-            }
-            required
-          />
+            <button onClick={handleLogout} className="btn-danger">
+              <LogOut size={16} /> Logout
+            </button>
+          </div>
+        </header>
 
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Price"
-            value={newProduct.price}
-            onChange={(e) =>
-              setNewProduct({ ...newProduct, price: e.target.value })
-            }
-            required
-          />
-
-          <input
-            type="number"
-            placeholder="Stock Quantity"
-            value={newProduct.stock}
-            onChange={(e) =>
-              setNewProduct({ ...newProduct, stock: e.target.value })
-            }
-            required
-          />
-
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) =>
-              setNewProduct({ ...newProduct, image: e.target.files[0] })
-            }
-          />
-
-          <button type="submit">
-            {loading ? "Adding..." : "Add to Database"}
+        {!showAddForm ? (
+          <button className="btn-add" onClick={() => setShowAddForm(true)}>
+            <Plus size={16} /> Add New Product
           </button>
+        ) : (
+          <form className="add-form" onSubmit={handleAddProduct}>
+            <h2>➕ Add New Product</h2>
 
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => {
-              setShowAddForm(false);
-              setNewProduct({ name: "", price: "", stock: "", image: null });
-            }}
-          >
-            Cancel
-          </button>
-        </form>
-      )}
+            <input
+              type="text"
+              placeholder="Product Name"
+              value={newProduct.name}
+              onChange={(e) =>
+                setNewProduct({ ...newProduct, name: e.target.value })
+              }
+              required
+            />
 
-      {loading && <p>⏳ Loading...</p>}
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Price"
+              value={newProduct.price}
+              onChange={(e) =>
+                setNewProduct({ ...newProduct, price: e.target.value })
+              }
+              required
+            />
 
-      <div className="product-grid">
-        {products.map((product) => (
-          <div key={product.product_id} className="product-card">
-            <div
-              className="product-img"
-              style={{
-                backgroundImage: product.image
-                  ? `url(http://localhost:5000/static/images/uploads/${product.image})`
-                  : "none",
-              }}
-            >
-              {!product.image && "📦"}
-            </div>
+            <input
+              type="number"
+              placeholder="Stock Quantity"
+              value={newProduct.stock}
+              onChange={(e) =>
+                setNewProduct({ ...newProduct, stock: e.target.value })
+              }
+              required
+            />
 
-            <h3>{product.name}</h3>
-            <p>${parseFloat(product.price).toFixed(2)}</p>
-            <p>Stock: {product.stock}</p>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setNewProduct({ ...newProduct, image: e.target.files[0] })
+              }
+            />
 
-            <button onClick={() => startEdit(product)}>
-              <Edit2 size={14} /> Edit
+            <button type="submit">
+              {loading ? "Adding..." : "Add to Database"}
             </button>
 
             <button
-              className="btn-delete"
-              onClick={() =>
-                handleDeleteProduct(product.product_id, product.name)
-              }
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setShowAddForm(false);
+                setNewProduct({
+                  name: "",
+                  price: "",
+                  stock: "",
+                  image: null,
+                });
+              }}
             >
-              <Trash2 size={14} /> Delete
+              Cancel
             </button>
-          </div>
-        ))}
-      </div>
+          </form>
+        )}
 
-      {products.length === 0 && !loading && (
-        <div className="empty">
-          <p>📭 No products in database</p>
-          <p>Click "Add New Product" to get started</p>
+        {loading && <p>⏳ Loading...</p>}
+
+        <div className="products-grid">
+          {products
+            .filter((product) =>
+              product.name.toLowerCase().includes(searchTerm.toLowerCase()),
+            )
+            .map((product) => (
+              <div key={product.product_id} className="product-card">
+                <div
+                  className="product-img"
+                  style={{
+                    backgroundImage: product.image
+                      ? `url(http://localhost:5000/static/images/uploads/${product.image})`
+                      : "none",
+                  }}
+                >
+                  {!product.image && "📦"}
+                </div>
+
+                <h3>{product.name}</h3>
+                <p>${parseFloat(product.price).toFixed(2)}</p>
+                <p>Stock: {product.stock}</p>
+
+                <div className="card-actions">
+                  <button
+                    className="btn-edit"
+                    onClick={() => startEdit(product)}
+                  >
+                    <Edit2 size={14} /> Edit
+                  </button>
+
+                  <button
+                    className="btn-delete"
+                    onClick={() =>
+                      handleDeleteProduct(product.product_id, product.name)
+                    }
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
         </div>
-      )}
+
+        {products.length === 0 && !loading && (
+          <div className="empty">
+            <p>📭 No products in database</p>
+            <p>Click "Add New Product" to get started</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
