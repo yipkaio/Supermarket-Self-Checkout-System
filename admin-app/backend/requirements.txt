@@ -2,3 +2,5 @@ Flask==3.0.0
 flask-cors==4.0.0
 mysql-connector-python==8.2.0
 Werkzeug==3.0.1
+python-barcode==0.15.1
+Pillow==10.1.0

@@ -102,7 +102,9 @@ function App() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        showNotification("✅ Product added to database!");
+        showNotification(
+          `✅ Product added to database! Barcode: ${data.barcode}`,
+        );
         await fetchProducts();
         setNewProduct({ name: "", price: "", stock: "", image: null });
         setShowAddForm(false);
@@ -413,6 +415,7 @@ function App() {
             )
             .map((product) => (
               <div key={product.product_id} className="product-card">
+                {/* Product Image */}
                 <div
                   className="product-img"
                   style={{
@@ -421,13 +424,32 @@ function App() {
                       : "none",
                   }}
                 >
-                  {!product.image && "📦"}
+                  {!product.image && <span className="no-image-icon">📦</span>}
                 </div>
 
-                <h3>{product.name}</h3>
-                <p>${parseFloat(product.price).toFixed(2)}</p>
-                <p>Stock: {product.stock}</p>
+                {/* Barcode */}
+                <div className="barcode-section">
+                  <div className="barcode-number">
+                    {product.barcode || "0000000000"}
+                  </div>
+                  <div className="barcode-label">Product ID</div>
+                </div>
 
+                {/* Product Details */}
+                <div className="product-details">
+                  <h3 className="product-name">{product.name}</h3>
+
+                  <div className="product-price">
+                    ${parseFloat(product.price).toFixed(2)}
+                  </div>
+
+                  <div className="product-stock">
+                    <span className="stock-label">In Stock</span>
+                    <span className="stock-value">{product.stock} units</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
                 <div className="card-actions">
                   <button
                     className="btn-edit"
