@@ -18,6 +18,7 @@ from hal import hal_dc_motor as dc_motor
 from hal import hal_accelerometer as accel
 
 import menu
+from barcode_scanner import BarcodeScanner  # already in same folder
 
 # ==============================
 # States
@@ -34,7 +35,7 @@ shared_keypad_queue = queue.Queue()
 # Keypad callback
 # ==============================
 def key_pressed(key):
-    print("KEY PRESSED:", key)  # keep debug for now
+    print("KEY PRESSED:", key, flush=True)
     shared_keypad_queue.put(key)
 
 # ==============================
@@ -47,8 +48,8 @@ def show_online_pickup_page(lcd):
 
 def show_in_store_page(lcd):
     lcd.lcd_clear()
-    lcd.lcd_display_string("Scan Item", 1)
-    lcd.lcd_display_string("# to Finish", 2)
+    lcd.lcd_display_string("In-Store Mode", 1)
+    lcd.lcd_display_string("#=Finish *=Back", 2)
 
 def show_admin_login_page(lcd):
     lcd.lcd_clear()
@@ -59,22 +60,15 @@ def show_admin_login_page(lcd):
 # Helper for invalid handling (REQ-07/08)
 # ==============================
 def handle_invalid(lcd, current_state, scanner_available, invalid_count):
-    """
-    REQ-07: show invalid input message (2s) and return to current menu/page
-    REQ-08: after 3 invalid inputs -> keypad error -> restart system (REQ-01)
-    Returns: (new_state, new_invalid_count, restarted_bool)
-    """
     invalid_count += 1
     menu.invalid_input(lcd)
 
     if invalid_count >= 3:
-        # REQ-08
         menu.keypad_error(lcd)
-        menu.startup_screen(lcd)      # restart (REQ-01)
+        menu.startup_screen(lcd)
         menu.menu_page_1(lcd, scanner_available)
         return (STATE_MENU_1, 0, True)
 
-    # Return user to the correct screen after invalid input
     if current_state == STATE_MENU_1:
         menu.menu_page_1(lcd, scanner_available)
     elif current_state == STATE_MENU_2:
@@ -96,8 +90,7 @@ def main():
     last_key_time = time.time()
     invalid_count = 0
 
-    # REQ-09: scanner availability flag (set False if scanner fails)
-    # For now, keep True unless you detect failure later.
+    # REQ-09 scanner availability flag
     scanner_available = True
 
     # ==============================
@@ -122,6 +115,18 @@ def main():
     lcd = LCD.lcd()
     lcd.lcd_clear()
 
+    # ==============================
+    # Create barcode scanner ONCE (debug preview on VNC)
+    # ==============================
+    scanner = None
+    try:
+        scanner = BarcodeScanner(show_preview=True)
+        scanner_available = True
+        print("[INFO] BarcodeScanner initialized", flush=True)
+    except Exception as e:
+        scanner_available = False
+        print("[ERROR] BarcodeScanner failed:", e, flush=True)
+
     # REQ-01 startup
     menu.startup_screen(lcd)
 
@@ -143,7 +148,8 @@ def main():
             keyvalue = shared_keypad_queue.get(timeout=0.1)
             last_key_time = time.time()
         except queue.Empty:
-            continue
+            # If we are in In-Store, we want to keep scanning even without keypad input
+            keyvalue = None
 
         # REQ-06 '*' anytime -> menu page 1
         if keyvalue == "*":
@@ -152,9 +158,14 @@ def main():
             menu.menu_page_1(lcd, scanner_available)
             continue
 
-        # REQ-04 '#' toggle menu pages; if in other states, treat as back to menu
+        # REQ-04 '#' toggle menu pages; if in other states, treat as back/finish
         if keyvalue == "#":
             invalid_count = 0
+            if current_state == STATE_IN_STORE:
+                current_state = STATE_MENU_1
+                menu.menu_page_1(lcd, scanner_available)
+                continue
+
             if current_state == STATE_MENU_1:
                 current_state = STATE_MENU_2
                 menu.menu_page_2(lcd)
@@ -167,14 +178,11 @@ def main():
             continue
 
         # ==============================
-        # Handle according to current state
+        # MENU PAGE 1
         # ==============================
-
-        # MENU PAGE 1 (REQ-02)
-        if current_state == STATE_MENU_1:
+        if current_state == STATE_MENU_1 and keyvalue is not None:
             if keyvalue == 1:
                 if not scanner_available:
-                    # REQ-09: online pickup disabled
                     menu.scanner_error(lcd)
                     menu.menu_page_1(lcd, scanner_available)
                     continue
@@ -196,8 +204,10 @@ def main():
                 )
                 continue
 
-        # MENU PAGE 2 (REQ-03)
-        if current_state == STATE_MENU_2:
+        # ==============================
+        # MENU PAGE 2
+        # ==============================
+        if current_state == STATE_MENU_2 and keyvalue is not None:
             if keyvalue == 3:
                 invalid_count = 0
                 current_state = STATE_ADMIN_LOGIN
@@ -209,11 +219,41 @@ def main():
                 )
                 continue
 
+        # ==============================
+        # IN-STORE MODE: AUTO SCAN LOOP
+        # ==============================
+        if current_state == STATE_IN_STORE:
+            if not scanner_available or scanner is None:
+                menu.scanner_error(lcd)
+                current_state = STATE_MENU_1
+                menu.menu_page_1(lcd, scanner_available)
+                continue
+
+            # Keep scanning continuously while in this state
+            lcd.lcd_clear()
+            lcd.lcd_display_string("Scanning...", 1)
+            lcd.lcd_display_string("#=Finish *=Back", 2)
+
+            code = scanner.scan_once(timeout=2)  # short timeout, loops again quickly
+            if code:
+                print("BARCODE SCANNED:", code, flush=True)
+                lcd.lcd_clear()
+                lcd.lcd_display_string("Scanned:", 1)
+                lcd.lcd_display_string(code[:16], 2)
+                buzzer.beep(0.2, 0.0, 1)
+                time.sleep(1.5)
+                show_in_store_page(lcd)
+
+            # loop continues; user can press # or * anytime
+            continue
+
+        # ==============================
         # OTHER STATES (placeholders)
-        # If user presses unexpected keys here, count as invalid attempt
-        current_state, invalid_count, _ = handle_invalid(
-            lcd, current_state, scanner_available, invalid_count
-        )
+        # ==============================
+        if keyvalue is not None:
+            current_state, invalid_count, _ = handle_invalid(
+                lcd, current_state, scanner_available, invalid_count
+            )
 
 if __name__ == "__main__":
     main()
