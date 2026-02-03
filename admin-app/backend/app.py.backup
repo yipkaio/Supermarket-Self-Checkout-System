@@ -1,0 +1,392 @@
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+import mysql.connector
+from mysql.connector import Error
+import os
+from werkzeug.utils import secure_filename
+from datetime import datetime
+import barcode
+from barcode.writer import ImageWriter
+import io
+import random
+
+
+app = Flask(__name__)
+
+# CORS Configuration
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept"],
+        "supports_credentials": True
+    }
+})
+
+# Configuration
+UPLOAD_FOLDER = 'static/images/uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Database Configuration - UPDATE THIS!
+DB_CONFIG = {
+    'host': 'metro.proxy.rlwy.net',
+    'port': 48897,  
+    'user': 'root',  
+    'password': 'YOdvGwlAhmzIWuoFjPnrYddwuGdqfFwm', 
+    'database': 'railway'
+}
+
+def get_db_connection():
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        if connection.is_connected():
+            return connection
+    except Error as e:
+        print(f"❌ Database error: {e}")
+        return None
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def generate_unique_barcode():
+    """Generate a unique 10-digit barcode"""
+    while True:
+        # Generate 10-digit number
+        # First digit: 2 (retail products)
+        # Next 2 digits: category (00-99)
+        # Last 7 digits: random
+        barcode_num = '2' + str(random.randint(0, 99)).zfill(2) + str(random.randint(0, 9999999)).zfill(7)
+        
+        # Check if barcode already exists
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT barcode FROM products WHERE barcode = %s", (barcode_num,))
+            exists = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if not exists:
+                return barcode_num
+        else:
+            # Fallback if DB connection fails
+            return barcode_num
+
+def generate_barcode_image(barcode_number, product_name):
+    """Generate barcode image as PNG"""
+    try:
+        # Create barcode
+        EAN = barcode.get_barcode_class('code128')
+        ean = EAN(barcode_number, writer=ImageWriter())
+        
+        # Save to bytes
+        buffer = io.BytesIO()
+        ean.write(buffer, options={
+            'module_width': 0.3,
+            'module_height': 10.0,
+            'quiet_zone': 2.0,
+            'font_size': 8,
+            'text_distance': 3.0,
+            'write_text': True
+        })
+        
+        # Save to file
+        filename = f"barcode_{barcode_number}.png"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        with open(filepath, 'wb') as f:
+            f.write(buffer.getvalue())
+        
+        print(f"✅ Generated barcode image: {filepath}")
+        return filename
+        
+    except Exception as e:
+        print(f"❌ Barcode generation error: {e}")
+        return None
+
+def check_barcode_exists(barcode_num):
+    """Check if barcode already exists in database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM products WHERE barcode = %s", (barcode_num,))
+    count = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    
+    return count > 0
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response, 200
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    conn = get_db_connection()
+    if conn:
+        conn.close()
+        return jsonify({'status': 'success', 'message': 'API running'}), 200
+    return jsonify({'status': 'error', 'message': 'DB connection failed'}), 500
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+        
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE username = %s AND password = %s", (username, password))
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if user:
+            return jsonify({
+                'success': True,
+                'user': {'user_id': user['user_id'], 'username': user['username']}
+            }), 200
+        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM products ORDER BY created_at DESC")
+        products = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        for product in products:
+            product['price'] = float(product['price'])
+        
+        return jsonify(products), 200
+    except Exception as e:
+        print(f"❌ Get products error: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/products/barcode/', methods=['GET'])
+def get_product_by_barcode(barcode_number):
+    """Get product by barcode - for scanner"""
+    try:
+        print(f"🔍 Looking up barcode: {barcode_number}")
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection failed'
+            }), 500
+        
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM products WHERE barcode = %s", (barcode_number,))
+        product = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not product:
+            print(f"⚠️ Barcode {barcode_number} not found")
+            return jsonify({
+                'success': False,
+                'error': 'Product not found'
+            }), 404
+        
+        product['price'] = float(product['price'])
+        
+        print(f"✅ Found product: {product['name']}")
+        return jsonify({
+            'success': True,
+            'product': product
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Barcode lookup error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+@app.route('/api/products', methods=['POST'])
+def create_product():
+    try:
+        name = request.form.get('name', '').strip()
+        price = request.form.get('price', '0')
+        stock = request.form.get('stock', '0')
+        
+        filename = None
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename and allowed_file(file.filename):
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"{timestamp}_{secure_filename(file.filename)}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+        
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO products (name, price, stock, image) VALUES (%s, %s, %s, %s)",
+            (name, float(price), int(stock), filename)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Created product: {name} (ID: {new_id})")
+        return jsonify({'success': True, 'product_id': new_id}), 201
+    except Exception as e:
+        print(f"❌ Create error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/products/<int:product_id>', methods=['PUT', 'OPTIONS'])
+def create_product():
+    """Create new product with barcode"""
+    try:
+        name = request.form.get('name', '').strip()
+        price = request.form.get('price', '0')
+        stock = request.form.get('stock', '0')
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'Product name is required'
+            }), 400
+        
+        # Generate unique barcode
+        barcode_number = generate_unique_barcode()
+        print(f"📊 Generated barcode: {barcode_number}")
+        
+        # Handle product image upload
+        product_image = None
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename and allowed_file(file.filename):
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                product_image = f"{timestamp}_{secure_filename(file.filename)}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], product_image))
+                print(f"✅ Product image saved: {product_image}")
+        
+        # Generate barcode image
+        barcode_image = generate_barcode_image(barcode_number, name)
+        
+        # Insert into database
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection failed'
+            }), 500
+        
+        cursor = conn.cursor()
+        query = """
+            INSERT INTO products (barcode, name, price, stock, image) 
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (barcode_number, name, float(price), int(stock), product_image))
+        conn.commit()
+        
+        new_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        
+        print(f"✅ Product created: {name} (ID: {new_id}, Barcode: {barcode_number})")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Product created successfully',
+            'product_id': new_id,
+            'barcode': barcode_number,
+            'barcode_image': barcode_image
+        }), 201
+        
+    except Exception as e:
+        print(f"❌ Create error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/products/<int:product_id>', methods=['DELETE', 'OPTIONS'])
+def delete_product(product_id):
+    try:
+        print(f"🗑️ DELETE request for product ID: {product_id}")
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+        
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT image FROM products WHERE product_id = %s", (product_id,))
+        product = cursor.fetchone()
+        
+        if not product:
+            cursor.close()
+            conn.close()
+            print(f"⚠️ Product {product_id} not found")
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        
+        cursor.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        if product['image']:
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], product['image'])
+            if os.path.exists(image_path):
+                os.remove(image_path)
+        
+        print(f"✅ Deleted product {product_id}")
+        return jsonify({'success': True, 'message': 'Product deleted'}), 200
+    except Exception as e:
+        print(f"❌ Delete error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/static/images/uploads/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+# Debug: List routes
+def list_routes():
+    print("\n" + "=" * 60)
+    print("📋 REGISTERED ROUTES:")
+    for rule in app.url_map.iter_rules():
+        methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+        print(f"   {methods:10s} {rule.rule}")
+    print("=" * 60 + "\n")
+
+list_routes()
+
+if __name__ == '__main__':
+    print("🚀 Starting Flask on http://localhost:5000")
+    print(f"📁 Uploads: {os.path.abspath(UPLOAD_FOLDER)}")
+    print("🌐 CORS enabled for http://localhost:5173\n")
+    app.run(host='0.0.0.0', port=5000, debug=True)
