@@ -30,15 +30,6 @@ def menu_page_1(lcd, scanner_available=True):
 
 
 
-# REQ-03 : Main Menu Page 2
-
-def menu_page_2(lcd):
-    """
-    Display Admin Menu
-    """
-    lcd.lcd_clear()
-    lcd.lcd_display_string("3.Admin Login", 1)
-    lcd.lcd_display_string("#.Back", 2)
 
 
 
