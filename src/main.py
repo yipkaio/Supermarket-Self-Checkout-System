@@ -27,7 +27,7 @@ from barcode_scanner import BarcodeScanner
 DB_HOST = "metro.proxy.rlwy.net"
 DB_PORT = 48897
 DB_USER = "root"
-DB_PASS = "PUT_PASSWORD_HERE"  # <-- put your real password locally, DON'T commit
+DB_PASS = "YOdvGwlAhmzIWuoFjPnrYddwuGdqfFwm"   # ❗ DO NOT COMMIT
 DB_NAME = "railway"
 BARCODE_LEN = 10
 
@@ -51,7 +51,7 @@ def key_pressed(key):
     shared_keypad_queue.put(key)
 
 # ==============================
-# DB: product lookup (scan time)
+# DB: PRODUCT LOOKUP (IN-STORE)
 # ==============================
 def get_product_by_barcode(barcode10):
     conn = pymysql.connect(
@@ -64,49 +64,66 @@ def get_product_by_barcode(barcode10):
     )
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT name, price FROM products WHERE barcode=%s", (barcode10,))
+            cur.execute(
+                "SELECT name, price FROM products WHERE barcode=%s",
+                (barcode10,)
+            )
             row = cur.fetchone()
             if not row:
                 return None
-            name, price = row
-            return str(name), float(price)
+            return str(row[0]), float(row[1])
     finally:
         conn.close()
 
 # ==============================
-# DB: deduct stock (payment time)
+# DB: ONLINE PICKUP QR LOOKUP
 # ==============================
-def deduct_stock_after_payment(cart):
-    """
-    Deduct stock only after payment success.
-    cart = {barcode10: qty}
-    Returns True if success, False if mismatch/insufficient.
-    """
+def get_pickup_id_by_qr(qr_code):
     conn = pymysql.connect(
         host=DB_HOST,
         port=DB_PORT,
         user=DB_USER,
         password=DB_PASS,
         database=DB_NAME,
-        connect_timeout=5,
+        connect_timeout=5
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT pickup_id FROM pickup_orders WHERE qr_code=%s",
+                (qr_code,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return row[0]
+    finally:
+        conn.close()
+
+# ==============================
+# DB: DEDUCT STOCK AFTER PAYMENT
+# ==============================
+def deduct_stock_after_payment(cart):
+    conn = pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASS,
+        database=DB_NAME,
         autocommit=False
     )
     try:
         with conn.cursor() as cur:
-            # 1) Check availability for all items
             for barcode10, qty in cart.items():
-                cur.execute("SELECT stock FROM products WHERE barcode=%s", (barcode10,))
+                cur.execute(
+                    "SELECT stock FROM products WHERE barcode=%s",
+                    (barcode10,)
+                )
                 row = cur.fetchone()
-                if row is None:
+                if row is None or int(row[0]) < qty:
                     conn.rollback()
                     return False
 
-                stock = int(row[0])
-                if stock < qty:
-                    conn.rollback()
-                    return False
-
-            # 2) Deduct stock for all items
             for barcode10, qty in cart.items():
                 cur.execute(
                     "UPDATE products SET stock = stock - %s WHERE barcode=%s",
@@ -115,38 +132,35 @@ def deduct_stock_after_payment(cart):
 
         conn.commit()
         return True
-
     except Exception as e:
-        print("[ERROR] deduct_stock_after_payment:", e, flush=True)
+        print("[ERROR]", e, flush=True)
         conn.rollback()
         return False
-
     finally:
         conn.close()
 
 # ==============================
 # LCD PAGES
 # ==============================
-def show_in_store_page(lcd, total):
-    lcd.lcd_clear()
-    lcd.lcd_display_string("Scan item...", 1)
-    lcd.lcd_display_string(f"T:${total:.2f}  #Pay"[:16], 2)
-
 def show_online_pickup_page(lcd):
     lcd.lcd_clear()
     lcd.lcd_display_string("Online Pickup", 1)
     lcd.lcd_display_string("Scan QR *=Back", 2)
+
+def show_in_store_page(lcd, total):
+    lcd.lcd_clear()
+    lcd.lcd_display_string("Scan item...", 1)
+    lcd.lcd_display_string(f"T:${total:.2f} #Pay"[:16], 2)
 
 def show_checkout_menu(lcd, total):
     lcd.lcd_clear()
     lcd.lcd_display_string("1.ATM 2.PayWave", 1)
     lcd.lcd_display_string(f"Tot:${total:.2f} *=Back"[:16], 2)
 
-def show_atm_prompt(lcd, pin_len=0):
+def show_atm_prompt(lcd, pin_len):
     lcd.lcd_clear()
     lcd.lcd_display_string("Enter PIN:", 1)
-    masked = "*" * pin_len + "_" * (4 - pin_len)
-    lcd.lcd_display_string((masked + " *=Back")[:16], 2)
+    lcd.lcd_display_string("*" * pin_len + "_" * (4 - pin_len), 2)
 
 def show_paywave_prompt(lcd):
     lcd.lcd_clear()
@@ -158,20 +172,10 @@ def show_payment_ok(lcd):
     lcd.lcd_display_string("Payment", 1)
     lcd.lcd_display_string("SUCCESS", 2)
 
-def show_assistance_needed(lcd):
-    """
-    Stock mismatch / system mismatch message
-    (better UX than 'out of stock')
-    """
-    lcd.lcd_clear()
-    lcd.lcd_display_string("Assistance", 1)
-    lcd.lcd_display_string("Needed", 2)
-
 def show_wrong_pin(lcd):
     lcd.lcd_clear()
     lcd.lcd_display_string("Wrong PIN", 1)
     lcd.lcd_display_string("Try Again", 2)
-    
 
 # ==============================
 # PAYMENT HELPERS
@@ -181,10 +185,7 @@ def read_pin(shared_q, lcd, timeout=20):
     start = time.time()
     show_atm_prompt(lcd, len(pin))
 
-    while True:
-        if time.time() - start > timeout:
-            return None
-
+    while time.time() - start < timeout:
         try:
             k = shared_q.get(timeout=0.1)
         except queue.Empty:
@@ -193,32 +194,29 @@ def read_pin(shared_q, lcd, timeout=20):
         if k == "*":
             return None
 
-        if isinstance(k, int) and 0 <= k <= 9:
+        if isinstance(k, int):
             pin += str(k)
             show_atm_prompt(lcd, len(pin))
             if len(pin) == 4:
                 return pin
+    return None
 
 def read_rfid_id(rfid, timeout=15):
     start = time.time()
-    while True:
-        if time.time() - start > timeout:
-            return None
-        card_id = rfid.read_id_no_block()
-        if card_id is not None:
-            return str(card_id)
+    while time.time() - start < timeout:
+        card = rfid.read_id_no_block()
+        if card:
+            return str(card)
         time.sleep(0.1)
+    return None
 
 # ==============================
 # MAIN PROGRAM
 # ==============================
 def main():
     current_state = STATE_MENU_1
-    last_key_time = time.time()
-
     cart_total = 0.0
-    cart = {}  # barcode10 -> qty (important!)
-    scanner_available = True
+    cart = {}
 
     # HAL init
     led.init()
@@ -239,55 +237,32 @@ def main():
 
     lcd = LCD.lcd()
 
-    # Barcode scanner init (once)
-    try:
-        scanner = BarcodeScanner(show_preview=True)
-        print("[INFO] Camera scanner ready", flush=True)
-    except Exception as e:
-        scanner_available = False
-        scanner = None
-        print("[ERROR] Scanner init failed:", e, flush=True)
+    # Camera init
+    scanner = BarcodeScanner(show_preview=True)
 
-    # Startup + menu
     menu.startup_screen(lcd)
-    menu.menu_page_1(lcd, scanner_available)
-    last_key_time = time.time()
+    menu.menu_page_1(lcd, True)
 
     while True:
-        # REQ-05 inactivity timeout only on menu screen
-        if time.time() - last_key_time > 30:
-            if current_state == STATE_MENU_1:
-                menu.menu_page_1(lcd, scanner_available)
-
         try:
             keyvalue = shared_keypad_queue.get(timeout=0.1)
-            last_key_time = time.time()
         except queue.Empty:
             keyvalue = None
 
-        # '*' global back (cancel)
         if keyvalue == "*":
             current_state = STATE_MENU_1
-            menu.menu_page_1(lcd, scanner_available)
+            menu.menu_page_1(lcd, True)
             continue
 
         # ==============================
-        # MENU PAGE 1
+        # MENU
         # ==============================
         if current_state == STATE_MENU_1 and keyvalue is not None:
-
-            # 1 = Online Pickup (QR ONLY)
             if keyvalue == 1:
-                if not scanner_available or scanner is None:
-                    menu.scanner_error(lcd)
-                    menu.menu_page_1(lcd, scanner_available)
-                    continue
-
                 current_state = STATE_ONLINE_PICKUP
                 show_online_pickup_page(lcd)
                 continue
 
-            # 2 = In-Store Purchase (BARCODE ONLY)
             if keyvalue == 2:
                 cart_total = 0.0
                 cart = {}
@@ -296,181 +271,94 @@ def main():
                 continue
 
             menu.invalid_input(lcd)
-            menu.menu_page_1(lcd, scanner_available)
-            continue
+            menu.menu_page_1(lcd, True)
 
         # ==============================
-        # ONLINE PICKUP MODE (QR ONLY)
+        # ONLINE PICKUP (QR ONLY)
         # ==============================
         if current_state == STATE_ONLINE_PICKUP:
+            qr = scanner.scan_once(timeout=2, mode="qr")
+            if qr:
+                pickup_id = get_pickup_id_by_qr(qr)
+                if pickup_id:
+                    lcd.lcd_clear()
+                    lcd.lcd_display_string(f"Order {pickup_id}"[:16], 1)
+                    lcd.lcd_display_string("Collected", 2)
+                    buzzer.beep(0.2, 0, 1)
+                    time.sleep(3)
+                else:
+                    lcd.lcd_clear()
+                    lcd.lcd_display_string("Invalid QR", 1)
+                    lcd.lcd_display_string("Call Staff", 2)
+                    time.sleep(2)
 
-            if not scanner_available or scanner is None:
-                menu.scanner_error(lcd)
                 current_state = STATE_MENU_1
-                menu.menu_page_1(lcd, scanner_available)
-                continue
-
-            show_online_pickup_page(lcd)
-
-            qr_text = scanner.scan_once(timeout=2, mode="qr")
-
-            if qr_text:
-                qr_text = str(qr_text).strip()
-
-                print("QR SCANNED:", qr_text, flush=True)
-
-                lcd.lcd_clear()
-                lcd.lcd_display_string("QR Detected!", 1)
-                lcd.lcd_display_string(qr_text[:16], 2)
-
-                buzzer.beep(0.2, 0.0, 1)
-                time.sleep(2)
-
-                # After success → return to menu (later validate QR in DB)
-                current_state = STATE_MENU_1
-                menu.menu_page_1(lcd, scanner_available)
-
-            continue
+                menu.menu_page_1(lcd, True)
 
         # ==============================
-        # IN-STORE MODE (AUTO SCAN)
+        # IN-STORE BARCODE SCANNING
         # ==============================
         if current_state == STATE_IN_STORE:
-
-            # if user presses '#', go to checkout menu
             if keyvalue == "#":
                 current_state = STATE_CHECKOUT
                 show_checkout_menu(lcd, cart_total)
                 continue
 
-            if not scanner_available or scanner is None:
-                menu.scanner_error(lcd)
-                current_state = STATE_MENU_1
-                menu.menu_page_1(lcd, scanner_available)
-                continue
-
-            show_in_store_page(lcd, cart_total)
-
             code = scanner.scan_once(timeout=2, mode="barcode")
-
             if code:
-                raw = str(code).strip()
-                barcode10 = raw.zfill(BARCODE_LEN)
-
-                print("BARCODE SCANNED:", barcode10, flush=True)
-
+                barcode10 = code.zfill(BARCODE_LEN)
                 product = get_product_by_barcode(barcode10)
-                if product is None:
+
+                if not product:
                     lcd.lcd_clear()
                     lcd.lcd_display_string("Not Found", 1)
                     lcd.lcd_display_string(barcode10[:16], 2)
-                    time.sleep(1.2)
+                    time.sleep(1.5)
                     continue
 
                 name, price = product
-
-                # Update cart in memory ONLY (no DB deduction yet)
                 cart[barcode10] = cart.get(barcode10, 0) + 1
                 cart_total += price
 
                 lcd.lcd_clear()
                 lcd.lcd_display_string(f"{name} ${price:.2f}"[:16], 1)
                 lcd.lcd_display_string(f"Total ${cart_total:.2f}"[:16], 2)
-
-                buzzer.beep(0.2, 0.0, 1)
+                buzzer.beep(0.2, 0, 1)
                 time.sleep(2)
 
-            continue
-
         # ==============================
-        # CHECKOUT MENU
+        # CHECKOUT
         # ==============================
         if current_state == STATE_CHECKOUT and keyvalue is not None:
             if keyvalue == 1:
                 current_state = STATE_ATM_PIN
-                show_atm_prompt(lcd, 0)
                 continue
-            elif keyvalue == 2:
+            if keyvalue == 2:
                 current_state = STATE_PAYWAVE
                 show_paywave_prompt(lcd)
-                continue
-            else:
-                menu.invalid_input(lcd)
-                show_checkout_menu(lcd, cart_total)
-                continue
 
-        # ==============================
-        # ATM PAYMENT
-        # ==============================
         if current_state == STATE_ATM_PIN:
-            pin = read_pin(shared_keypad_queue, lcd, timeout=20)
-            if pin is None:
-                current_state = STATE_CHECKOUT
-                show_checkout_menu(lcd, cart_total)
-                continue
-
-            # Demo PIN
+            pin = read_pin(shared_keypad_queue, lcd)
             if pin != "1234":
                 show_wrong_pin(lcd)
                 time.sleep(2)
                 current_state = STATE_CHECKOUT
-                show_checkout_menu(lcd, cart_total)
                 continue
 
-            # PIN ok → NOW deduct stock
-            ok = deduct_stock_after_payment(cart)
-            if not ok:
-                show_assistance_needed(lcd)
-                time.sleep(2)
-                current_state = STATE_CHECKOUT
-                show_checkout_menu(lcd, cart_total)
-                continue
-
+            deduct_stock_after_payment(cart)
             show_payment_ok(lcd)
             time.sleep(2)
-
-            # Reset cart after success
-            cart_total = 0.0
-            cart = {}
             current_state = STATE_MENU_1
-            menu.menu_page_1(lcd, scanner_available)
-            continue
+            menu.menu_page_1(lcd, True)
 
-        # ==============================
-        # PAYWAVE (RFID)
-        # ==============================
         if current_state == STATE_PAYWAVE:
-            show_paywave_prompt(lcd)
-            card_id = read_rfid_id(rfid, timeout=15)
-
-            if card_id is None:
-                show_assistance_needed(lcd)
+            card = read_rfid_id(rfid)
+            if card:
+                deduct_stock_after_payment(cart)
+                show_payment_ok(lcd)
                 time.sleep(2)
-                current_state = STATE_CHECKOUT
-                show_checkout_menu(lcd, cart_total)
-                continue
-
-            print("RFID CARD:", card_id, flush=True)
-
-            # Card tapped → NOW deduct stock
-            ok = deduct_stock_after_payment(cart)
-            if not ok:
-                show_assistance_needed(lcd)
-                time.sleep(2)
-                current_state = STATE_CHECKOUT
-                show_checkout_menu(lcd, cart_total)
-                continue
-
-            show_payment_ok(lcd)
-            time.sleep(2)
-
-            # Reset cart after success
-            cart_total = 0.0
-            cart = {}
-            current_state = STATE_MENU_1
-            menu.menu_page_1(lcd, scanner_available)
-            continue
-
+                current_state = STATE_MENU_1
+                menu.menu_page_1(lcd, True)
 
 if __name__ == "__main__":
     main()
