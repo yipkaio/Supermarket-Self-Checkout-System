@@ -8,13 +8,27 @@ export default function App() {
   const [userId, setUserId] = useState(null);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
+
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
-  const [toast, setToast] = useState("");
-  const [purchaseToast, setPurchaseToast] = useState(false);
-  const [purchaseTotal, setPurchaseTotal] = useState(0);
 
+  const [toast, setToast] = useState("");
+
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+
+  const [showQR, setShowQR] = useState(false); // PayNow QR
+  const [showPickupQR, setShowPickupQR] = useState(false); // Pickup QR
+
+  const [qrImage, setQrImage] = useState("");
+  const [qrValue, setQrValue] = useState("");
+
+  const [deliveryType, setDeliveryType] = useState("pickup");
+  const [paymentMethod] = useState("paynow");
+
+  const [doneDisabled, setDoneDisabled] = useState(false); // prevent multi-click
+
+  // ---------------- LOGIN ----------------
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -40,12 +54,14 @@ export default function App() {
     }
   };
 
+  // ---------------- PRODUCTS ----------------
   const fetchProducts = async () => {
     const res = await fetch(`${API_URL}/products`);
     const data = await res.json();
     setProducts(data);
   };
 
+  // ---------------- CART ----------------
   const addToCart = (product) => {
     setCart((prev) => {
       const found = prev.find((p) => p.product_id === product.product_id);
@@ -57,7 +73,6 @@ export default function App() {
       return [...prev, { ...product, qty: 1 }];
     });
 
-    // snackbar
     setToast(`${product.name} added to cart`);
     setTimeout(() => setToast(""), 3000);
   };
@@ -66,6 +81,7 @@ export default function App() {
     setCart(cart.filter((item) => item.product_id !== id));
   };
 
+  // ---------------- CHECKOUT ----------------
   const checkout = async () => {
     const items = cart.map((item) => ({
       product_id: item.product_id,
@@ -75,28 +91,22 @@ export default function App() {
     const res = await fetch(`${API_URL}/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, items }),
+      body: JSON.stringify({
+        user_id: userId,
+        items,
+        delivery_type: deliveryType,
+        payment_method: paymentMethod,
+      }),
     });
 
-    const data = await res.json();
-
     if (res.ok) {
-      setPurchaseTotal(data.total);
-      setPurchaseToast(true);
-
-      setTimeout(() => {
-        setPurchaseToast(false);
-      }, 3000);
-
-      setCart([]);
-      setShowCart(false);
-      fetchProducts();
-    } else {
-      alert(data.error);
+      setShowCheckoutModal(false);
+      setShowQR(true); // show PayNow QR
+      setDoneDisabled(false);
     }
   };
 
-  /* ================= LOGIN PAGE ================= */
+  // ---------------- LOGIN PAGE ----------------
   if (!loggedIn) {
     return (
       <div className="login-page">
@@ -125,7 +135,7 @@ export default function App() {
     );
   }
 
-  /* ================= CART PAGE ================= */
+  // ---------------- CART PAGE ----------------
   if (showCart) {
     return (
       <div className="page">
@@ -163,17 +173,219 @@ export default function App() {
 
           {cart.length > 0 && (
             <div className="cart-footer">
-              <button className="checkout-btn" onClick={checkout}>
+              <button
+                className="checkout-btn"
+                onClick={() => setShowCheckoutModal(true)}
+              >
                 Checkout
               </button>
             </div>
           )}
         </div>
+
+        {/* ---------------- CHECKOUT MODAL ---------------- */}
+        {showCheckoutModal && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <h2>Checkout</h2>
+
+              <div className="section">
+                <p>
+                  <strong>Items Total:</strong> $
+                  {cart.reduce((sum, i) => sum + i.price * i.qty, 0).toFixed(2)}
+                </p>
+
+                {deliveryType === "delivery" && (
+                  <p className="delivery-fee">Delivery Fee: +$3.00</p>
+                )}
+
+                <p className="final-total">
+                  <strong>Final Total:</strong> $
+                  {(
+                    cart.reduce((sum, i) => sum + i.price * i.qty, 0) +
+                    (deliveryType === "delivery" ? 3 : 0)
+                  ).toFixed(2)}
+                </p>
+              </div>
+
+              <div className="section">
+                <h4>Delivery Method</h4>
+
+                <label>
+                  <input
+                    type="radio"
+                    name="delivery"
+                    checked={deliveryType === "pickup"}
+                    onChange={() => setDeliveryType("pickup")}
+                  />
+                  In-store Pickup (Free)
+                </label>
+
+                <label>
+                  <input
+                    type="radio"
+                    name="delivery"
+                    checked={deliveryType === "delivery"}
+                    onChange={() => setDeliveryType("delivery")}
+                  />
+                  Delivery (+$3)
+                </label>
+              </div>
+
+              <div className="section">
+                <h4>Payment Method</h4>
+                <label>
+                  <input type="radio" checked readOnly />
+                  PayNow
+                </label>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  className="cancel-btn"
+                  onClick={() => setShowCheckoutModal(false)}
+                >
+                  Cancel
+                </button>
+
+                <button className="confirm-btn" onClick={checkout}>
+                  Confirm Checkout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- PAYNOW QR ---------------- */}
+        {showQR && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <h2>Scan to Pay (PayNow)</h2>
+
+              <img
+                src="/Paynow.png"
+                alt="PayNow QR"
+                style={{
+                  width: "220px",
+                  display: "block",
+                  margin: "20px auto",
+                }}
+              />
+
+              <p style={{ textAlign: "center" }}>
+                Please scan this QR code to complete payment
+              </p>
+
+              <button
+                className="confirm-btn"
+                disabled={doneDisabled}
+                onClick={async () => {
+                  if (doneDisabled) return;
+                  setDoneDisabled(true);
+
+                  // DELIVERY → no DB, no QR
+                  if (deliveryType === "delivery") {
+                    setShowQR(false);
+                    setCart([]);
+                    setShowCart(false);
+                    fetchProducts();
+                    return;
+                  }
+
+                  // PICKUP → create QR + save DB
+                  const pickupItems = cart.map((item) => ({
+                    product_id: item.product_id,
+                    product_name: item.name,
+                    quantity: item.qty,
+                  }));
+
+                  const res = await fetch(`${API_URL}/create-pickup`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      username: loginForm.username,
+                      items: pickupItems,
+                    }),
+                  });
+
+                  const data = await res.json();
+
+                  console.log("Pickup response:", data);
+
+                  if (!res.ok) {
+                    alert("Pickup creation failed");
+                    console.error(data);
+                    return;
+                  }
+
+                  if (!data.qr_image || !data.qr_code) {
+                    console.error("Missing QR data:", data);
+                    alert("QR generation error");
+                    return;
+                  }
+
+                  setShowQR(false);
+
+                  const fullQrUrl = `${API_URL}${data.qr_image}`;
+                  console.log("Full QR URL:", fullQrUrl);
+
+                  console.log("FULL QR URL:", fullQrUrl);
+                  console.log("QR CODE:", data.qr_code);
+
+                  setQrImage(fullQrUrl);
+                  setQrValue(data.qr_code);
+                  setShowPickupQR(true);
+
+                  setCart([]);
+                  fetchProducts();
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- PICKUP QR SCREEN ---------------- */}
+        {showPickupQR && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <h2>Pickup Code</h2>
+
+              <p style={{ textAlign: "center", fontWeight: "bold" }}>
+                {qrValue}
+              </p>
+
+              <img
+                src={qrImage}
+                alt="Pickup QR"
+                style={{
+                  width: "260px",
+                  display: "block",
+                  margin: "20px auto",
+                }}
+              />
+
+              <p style={{ textAlign: "center" }}>
+                Show this QR at the pickup counter
+              </p>
+
+              <button
+                className="confirm-btn"
+                onClick={() => {setShowPickupQR(false);
+                  setShowCart(false);
+                }}
+              >
+                Finish
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  /* ================= MAIN SHOP PAGE ================= */
+  // ---------------- SHOP PAGE ----------------
   return (
     <div className="page">
       <header className="header">
@@ -205,15 +417,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ADD TO CART SNACKBAR */}
       {toast && <div className="snackbar">🛒 {toast}</div>}
-
-      {/* PURCHASE SNACKBAR */}
-      {purchaseToast && (
-        <div className="snackbar success">
-          ✅ Purchase successful — Total: ${purchaseTotal}
-        </div>
-      )}
     </div>
   );
 }
