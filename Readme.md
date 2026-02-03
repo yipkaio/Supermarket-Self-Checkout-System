@@ -2,13 +2,18 @@
 
 ## 1. Project Overview
 The **Supermarket Self-Checkout System** is an automated checkout solution designed for SPmart Supermarket to reduce customer waiting time during payment.  
+
 The system supports both **in-store self-checkout** and **online purchases**, providing a seamless and efficient shopping experience.
+
+The system has a frontend application (web application) and a Raspberry Pi integrated in-store self-checkout for purchasing and receiving products 
+
 
 Customers can:
 - Scan products and pay independently in-store
-- Purchase items online via a mobile app or website
+- Purchase items online via a website
 - Choose between **store pickup** or **home delivery**
-- Pay using multiple payment modes
+- Pay using multiple payment modes in both in-store and online
+
 
 ---
 
@@ -41,6 +46,32 @@ Customers can:
 
 ### 4.1 Functional Requirements
 
+#### Admin Access for Staff
+- The system shall provide a secure admin login page for supermarket staff
+- Admins must authenticate using a username and password
+- Only authenticated admins are allowed access to admin-only features
+- Unauthorized users shall be denied access to admin pages
+
+#### Product Management (CRUD)
+- The system shall allow admins to **create new products** in the central database
+  - Required product attributes: 
+   - Product Name
+   - Price
+   - Stock Quantity 
+   - Product Image
+- The system shall allow admins to view (read) all existing products
+- The system shall allow admins to update product information, including:
+  - Price
+  - Stock Quantity
+- The system shall allow admins to delete products
+  - Deletion shall be restricted if the product is linked to an active transaction
+
+#### System Integration
+- Any changes made by admins shall be **reflected immediately** across:
+  - In-store self-checkout system
+  - Online web application
+-The system shall ensure price and stock consistency across all platforms 
+  
 #### In-Store Purchases
 - Each product has a **10-digit unique barcode**
 - Camera scans product barcode
@@ -53,13 +84,16 @@ Customers can:
 
 #### Online Purchases
 - Customers can purchase via:
-  - Smartphone App
   - Web Application
 - Customers can choose:
   - Store pickup
   - Home delivery (additional $4.00 fee)
-- QR code generated after successful online payment
-- QR code is used for item collection at supermarket
+- #### Store pickup
+  - QR code generated after successful online payment
+  - QR code is used for item collection at supermarket
+- #### Home delivery 
+  - Customer required to input their address 
+  - Goods will be sent to their inputted address
 
 #### Payment Modes
 - ATM payment via numeric keypad (PIN-based)
@@ -106,42 +140,52 @@ The system follows a **client-server architecture** with centralized data manage
 
 ### 6.1 Use Case Diagram (Description)
 **Actors**
-- Customer
-- Supermarket Staff
-- Payment System
+- User (In-Store Purchase)
+- User (Online Purchase)
+- Admin (Supermarket Staff)
 
 **Main Use Cases**
 - Scan product
 - View total price
 - Make payment
-- Purchase online
-- Generate QR code
-- Collect items
-- Deliver items
+- Add products to cart
+- Online Checkout
+- Home Delivery 
+- Store Pickup
+
+![Use Case Diagram](Images/Usecase.png)
 
 ---
 
 ### 6.2 Class Diagram (Description)
 
 **Main Classes**
-- `Product`
-  - productID
+- `products`
+  - product_id
+  - barcode
   - name
   - price
-- `Transaction`
-  - transactionID
-  - totalAmount
-  - paymentMethod
-- `Customer`
-  - customerID
-  - purchaseType
-- `Order`
-  - orderID
-  - deliveryMethod
-  - qrCode
-- `Payment`
-  - paymentType
-  - paymentStatus
+  - stock
+  - image 
+  - created_at
+  - updated_at
+- `transactions`
+  - transaction_id
+  - total
+  - created_at
+  - user_id
+- `transaction_items`
+  - id
+  - transaction_id
+  - product_id 
+  - quantity 
+  - price_at_purchase 
+- `users`
+  - user_id
+  - username
+  - password
+  - created_at
+  - address
 
 ---
 
