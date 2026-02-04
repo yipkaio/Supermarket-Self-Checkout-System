@@ -1,0 +1,14 @@
+
+/* RESET + GLOBALS */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #f5f7fa;
+}
+
+/* Remove Vite demo styles */
+

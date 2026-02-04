@@ -115,10 +115,14 @@ Customers can:
 ### 5.1 High-Level Architecture
 The system follows a **client-server architecture** with centralized data management.
 
+![System Architecture](Images/System.png)
 
 ---
 
 ### 5.2 Software Components
+![Application Layer](Images/Application.png)
+
+![Hardware Layer](Images/Hardware.png)
 - **Frontend**
   - In-store LCD UI
   - Web application
@@ -189,12 +193,15 @@ The system follows a **client-server architecture** with centralized data manage
 
 ---
 
-### 6.3 Sequence Diagram (In-Store Purchase)
+### 6.3 Flow Chart (In-Store Purchase)
 
+![Flow Chart](Images/Instore.png)
 
 ---
 
 ## 7. System Workflow
+
+![General Flow Chart](Images/Generalflow.png)
 
 ### In-Store Checkout
 1. Customer scans product barcode
@@ -225,12 +232,7 @@ The system follows a **client-server architecture** with centralized data manage
 
 ---
 
-## 9. Installation & Setup (Future Work)
-Instructions will be provided once implementation is completed.
-
----
-
-## 10. Usage
+## 9. Usage
 - Launch in-store system for self-checkout
 - Access web/mobile app for online purchases
 - Follow on-screen instructions to complete checkout
@@ -238,21 +240,12 @@ Instructions will be provided once implementation is completed.
 
 ---
 
-## 11. Future Enhancements
+## 10. Future Enhancements
 - Loyalty reward system
 - Mobile wallet integration
 - AI-based product recognition
 - Receipt-less checkout
 - Multi-language support
 
----
-
-## 12. Authors
-Developed as part of a mini-project for academic purposes.
-
----
-
-## 13. License
-This project is for educational use only.
 
 
