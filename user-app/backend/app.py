@@ -4,7 +4,6 @@ import mysql.connector
 import os
 import uuid
 import qrcode
-from flask import send_from_directory
 
 
 app = Flask(__name__)
@@ -50,6 +49,18 @@ def add_product():
     price = data.get("price")
     stock = data.get("stock")
 
+    if not name or price is None or stock is None:
+        return jsonify({"error": "Missing fields"}), 400
+
+    try:
+        stock = int(stock)
+        price = float(price)
+    except:
+        return jsonify({"error": "Invalid price or stock format"}), 400
+
+    if stock == 0:
+        return jsonify({"error": "No stock available"}), 400
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -62,7 +73,8 @@ def add_product():
     cursor.close()
     conn.close()
 
-    return jsonify({"message": "Product added successfully"})
+    return jsonify({"message": "Product added successfully"}), 201
+
 
 # ---------------- REGISTER / LOGIN ----------------
 @app.route("/register", methods=["POST"])
@@ -109,7 +121,6 @@ def register():
         "user_id": user_id
     }), 201
 
-# ---------------- CHECKOUT ----------------
 @app.route("/checkout", methods=["POST"])
 def checkout():
     data = request.json
@@ -121,27 +132,43 @@ def checkout():
 
     total = 0
 
+    # ---------- VALIDATION + TOTAL CALC ----------
     for item in items:
         cursor.execute(
-            "SELECT price, stock FROM products WHERE product_id = %s",
+            "SELECT price, stock, name FROM products WHERE product_id = %s",
             (item["product_id"],)
         )
         product = cursor.fetchone()
 
         if not product:
+            cursor.close()
+            conn.close()
             return jsonify({"error": "Product not found"}), 400
 
+        if product["stock"] == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": f"{product['name']} is out of stock"
+            }), 400
+
         if product["stock"] < item["quantity"]:
-            return jsonify({"error": "Insufficient stock"}), 400
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": f"Insufficient amount for {product['name']}. Only {product['stock']} left."
+            }), 400
 
         total += product["price"] * item["quantity"]
 
+    # ---------- CREATE TRANSACTION ----------
     cursor.execute(
         "INSERT INTO transactions (total, user_id) VALUES (%s, %s)",
         (total, user_id)
     )
     transaction_id = cursor.lastrowid
 
+    # ---------- INSERT ITEMS + UPDATE STOCK ----------
     for item in items:
         cursor.execute(
             "SELECT price FROM products WHERE product_id = %s",
@@ -176,97 +203,63 @@ def checkout():
 @app.route("/create-pickup", methods=["POST"])
 def create_pickup():
     try:
-        print("\n=== CREATE PICKUP START ===")
-
         data = request.json
         username = data.get("username")
         items = data.get("items")
 
-        print("DATA:", username, items)
-
         if not username or not items:
             return jsonify({"error": "Missing data"}), 400
 
-        # generate QR value
+        # generate QR
         qr_value = str(uuid.uuid4())[:12]
-        print("QR VALUE:", qr_value)
 
         # save QR image
         folder = "qrcodes"
         os.makedirs(folder, exist_ok=True)
-
         filename = f"{qr_value}.png"
         filepath = os.path.join(folder, filename)
 
         img = qrcode.make(qr_value)
         img.save(filepath)
 
-        print("QR IMAGE SAVED:", filepath)
-
-        # save to MySQL
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
+        # ---------- create order ----------
+        cursor.execute("""
+            INSERT INTO pickup_orders (username, qr_code)
+            VALUES (%s, %s)
+        """, (username, qr_value))
+
+        pickup_id = cursor.lastrowid   
+
+        # ---------- insert items ----------
         for item in items:
             cursor.execute("""
-                INSERT INTO pickup
-                (username, product_id, product_name, quantity, qr_code)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO pickup_items
+                (pickup_id, product_id, product_name, quantity)
+                VALUES (%s, %s, %s, %s)
             """, (
-                username,
+                pickup_id,
                 item["product_id"],
                 item["product_name"],
-                item["quantity"],
-                qr_value
+                item["quantity"]
             ))
 
         conn.commit()
         cursor.close()
         conn.close()
 
-        print("DB INSERT DONE")
-
         return jsonify({
+            "pickup_id": pickup_id,
             "qr_code": qr_value,
             "qr_image": f"/barcodes/{filename}"
         }), 200
-
 
     except Exception as e:
         print("❌ ERROR:", e)
         return jsonify({"error": str(e)}), 500
 
-
-
-# ---------------- TEMP VERIFY BARCODE ----------------
-@app.route("/temp-verify/<barcode>", methods=["GET"])
-def temp_verify(barcode):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT product_id, product_name, quantity, barcode, username
-        FROM pickup
-        WHERE barcode = %s
-    """, (barcode,))
-
-    rows = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    if not rows:
-        return jsonify({
-            "valid": False,
-            "message": "Barcode not found"
-        }), 404
-
-    return jsonify({
-        "valid": True,
-        "barcode": barcode,
-        "username": rows[0]["username"],
-        "items": rows
-    }), 200
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":

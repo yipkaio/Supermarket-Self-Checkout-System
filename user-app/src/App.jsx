@@ -28,6 +28,9 @@ export default function App() {
 
   const [doneDisabled, setDoneDisabled] = useState(false); // prevent multi-click
 
+  const [address, setAddress] = useState("");
+  const [showAddressPopup, setShowAddressPopup] = useState(false);
+
   // ---------------- LOGIN ----------------
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -63,13 +66,29 @@ export default function App() {
 
   // ---------------- CART ----------------
   const addToCart = (product) => {
+    // No stock
+    if (product.stock === 0) {
+      setToast(`${product.name} is out of stock`);
+      setTimeout(() => setToast(""), 3000);
+      return;
+    }
+
     setCart((prev) => {
       const found = prev.find((p) => p.product_id === product.product_id);
+
+      // Exceeds stock
+      if (found && found.qty + 1 > product.stock) {
+        setToast(`Only ${product.stock} ${product.name} left in stock`);
+        setTimeout(() => setToast(""), 3000);
+        return prev; // no change
+      }
+
       if (found) {
         return prev.map((p) =>
           p.product_id === product.product_id ? { ...p, qty: p.qty + 1 } : p,
         );
       }
+
       return [...prev, { ...product, qty: 1 }];
     });
 
@@ -199,6 +218,12 @@ export default function App() {
                   <p className="delivery-fee">Delivery Fee: +$3.00</p>
                 )}
 
+                {deliveryType === "delivery" && address && (
+                  <p>
+                    <strong>Delivery Address:</strong> {address}
+                  </p>
+                )}
+
                 <p className="final-total">
                   <strong>Final Total:</strong> $
                   {(
@@ -226,9 +251,12 @@ export default function App() {
                     type="radio"
                     name="delivery"
                     checked={deliveryType === "delivery"}
-                    onChange={() => setDeliveryType("delivery")}
+                    onChange={() => {
+                      setDeliveryType("delivery");
+                      setShowAddressPopup(true); // open popup
+                    }}
                   />
-                  Delivery (+$3)
+                  Delivery (+$4)
                 </label>
               </div>
 
@@ -250,6 +278,53 @@ export default function App() {
 
                 <button className="confirm-btn" onClick={checkout}>
                   Confirm Checkout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showAddressPopup && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <h2>Delivery Address</h2>
+
+              <input
+                type="text"
+                placeholder="Enter delivery address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginTop: "15px",
+                  borderRadius: "6px",
+                  border: "1px solid #ccc",
+                }}
+              />
+
+              <div className="modal-actions">
+                <button
+                  className="cancel-btn"
+                  onClick={() => {
+                    setShowAddressPopup(false);
+                    setDeliveryType("pickup"); // revert selection
+                    setAddress("");
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  className="confirm-btn"
+                  onClick={() => {
+                    if (!address.trim()) {
+                      alert("Please enter delivery address");
+                      return;
+                    }
+                    setShowAddressPopup(false);
+                  }}
+                >
+                  Confirm
                 </button>
               </div>
             </div>
@@ -372,7 +447,8 @@ export default function App() {
 
               <button
                 className="confirm-btn"
-                onClick={() => {setShowPickupQR(false);
+                onClick={() => {
+                  setShowPickupQR(false);
                   setShowCart(false);
                 }}
               >
