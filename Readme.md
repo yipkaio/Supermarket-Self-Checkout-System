@@ -54,7 +54,7 @@ Customers can:
 
 To access the admin system, enter the link in a browser: 
 
-http://<Raspberry_Pi_IP>
+http://<Raspberry_Pi_IP> <br>
 e.g: http://192.168.0.100 (Admin system and raspberrypi must be in the same wifi to be able to connect) 
 #### Product Management (CRUD)
 - The system shall allow admins to **create new products** in the central database
