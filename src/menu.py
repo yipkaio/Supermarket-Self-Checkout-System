@@ -26,7 +26,7 @@ def menu_page_1(lcd, scanner_available=True):
     else:
         lcd.lcd_display_string("1.Unavailable", 1)
 
-    lcd.lcd_display_string("2.In-Store (#)", 2)
+    lcd.lcd_display_string("2.In-Store", 2)
 
 
 
