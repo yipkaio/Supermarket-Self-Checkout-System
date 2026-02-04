@@ -52,6 +52,10 @@ Customers can:
 - Only authenticated admins are allowed access to admin-only features
 - Unauthorized users shall be denied access to admin pages
 
+To access the admin system, enter the link in a browser: 
+
+http://<Raspberry-Pi-IP>
+e.g: http://192.168.0.100 (Admin system and raspberrypi must be in the same wifi to be able to connect) 
 #### Product Management (CRUD)
 - The system shall allow admins to **create new products** in the central database
   - Required product attributes: 
