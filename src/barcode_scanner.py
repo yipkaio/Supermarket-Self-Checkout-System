@@ -3,7 +3,7 @@ import time
 import cv2
 from picamera2 import Picamera2
 from pyzbar import pyzbar
-from pyzbar.pyzbar import ZBarSymbol
+from pyzbar.pyzbar import ZBarSymbol 
 
 class BarcodeScanner:
     def __init__(self, frame_size=(640, 480), show_preview=True):
