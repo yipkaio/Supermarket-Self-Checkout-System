@@ -1,0 +1,36 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Build outputs
+dist/
+build/
+.vite/
+
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+# Other
+*.md

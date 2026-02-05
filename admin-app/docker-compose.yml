@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    image: YOUR_USERNAME/supermarket-backend:latest
+    container_name: supermarket-backend
+    environment:
+      DB_HOST: metro.proxy.rlwy.net
+      DB_PORT: 48897
+      DB_USER: root
+      DB_PASSWORD: YOUR_RAILWAY_PASSWORD
+      DB_NAME: railway
+    ports:
+      - "5000:5000"
+    networks:
+      - supermarket-network
+    restart: unless-stopped
+
+  frontend:
+    image: YOUR_USERNAME/supermarket-frontend:latest
+    container_name: supermarket-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - supermarket-network
+    restart: unless-stopped
+
+networks:
+  supermarket-network:
+    driver: bridge

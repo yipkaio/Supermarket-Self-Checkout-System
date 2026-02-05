@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { LogIn, LogOut, Plus, Edit2, Trash2, RefreshCw } from "lucide-react";
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "/api";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -420,7 +420,7 @@ function App() {
                   className="product-img"
                   style={{
                     backgroundImage: product.image
-                      ? `url(http://localhost:5000/static/images/uploads/${product.image})`
+                      ? `url(/static/images/uploads/${product.image})`
                       : "none",
                   }}
                 >

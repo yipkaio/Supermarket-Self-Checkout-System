@@ -32,11 +32,11 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # ============ DATABASE CONFIGURATION ============
 # ⚠️ UPDATE THESE VALUES WITH YOUR MYSQL CREDENTIALS
 DB_CONFIG = {
-    'host': 'metro.proxy.rlwy.net',
-    'port': 48897,  
-    'user': 'root',  
-    'password': 'YOdvGwlAhmzIWuoFjPnrYddwuGdqfFwm',  
-    'database': 'railway'
+    'host': os.getenv('DB_HOST'),
+    'port': int(os.getenv('DB_PORT')),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME')
 }
 
 # ============ HELPER FUNCTIONS ============
@@ -484,4 +484,5 @@ if __name__ == '__main__':
     print(f"📊 Database: {DB_CONFIG['database']} @ {DB_CONFIG['host']}:{DB_CONFIG['port']}")
     print("\nPress CTRL+C to quit\n")
     
+    # Bind to 0.0.0.0 to allow Docker access
     app.run(host='0.0.0.0', port=5000, debug=True)
