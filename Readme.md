@@ -1,255 +1,207 @@
-# Group 3 AIoT DevOps Mini Project: Supermarket Self-Checkout System 
+<div align="center">
 
-## 1. Project Overview
-The **Supermarket Self-Checkout System** is an automated checkout solution designed for SPmart Supermarket to reduce customer waiting time during payment.  
+# 🛒 Supermarket Self-Checkout System
 
-The system supports both **in-store self-checkout** and **online purchases**, providing a seamless and efficient shopping experience.
+**An AIoT self-checkout kiosk on Raspberry Pi, with an online store and an admin dashboard that share one live product database.**
 
-The system has a frontend application (web application) and a Raspberry Pi integrated in-store self-checkout for purchasing and receiving products 
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-A22846?style=for-the-badge&logo=raspberrypi&logoColor=white)
 
+*ET0735 DevOps for AIoT · Singapore Polytechnic · Jan – Feb 2026*
 
-Customers can:
-- Scan products and pay independently in-store
-- Purchase items online via a website
-- Choose between **store pickup** or **home delivery**
-- Pay using multiple payment modes in both in-store and online
-
-
----
-
-## 2. Objectives
-- Reduce checkout queue time
-- Improve customer convenience
-- Support multiple purchasing methods (online & in-store)
-- Provide secure and flexible payment options
-- Maintain accurate and centralized product data
+</div>
 
 ---
 
-## 3. System Scope
-### In Scope
-- Barcode scanning using camera
-- Product lookup from central database
-- Real-time display of item details and total cost
-- ATM PIN and RFID (PayWave) payments
-- Online ordering with QR code generation
-- Store pickup and home delivery options
+## 📖 Overview
 
-### Out of Scope
-- Inventory supplier management
-- Employee payroll systems
-- External banking systems (assumed to exist)
+A self-checkout system for a fictional supermarket, **SPmart**, built to cut down queue times. Customers can scan and pay at an in-store kiosk, or shop online and choose store pickup or home delivery. Staff manage products from a web dashboard, and every change shows up immediately on the kiosk and the online store.
+
+<div align="center">
+<img src="Images/System.png" alt="System architecture" width="720">
+</div>
 
 ---
 
-## 4. System Requirements
+## ✨ Features
 
-### 4.1 Functional Requirements
-
-#### Admin Access for Staff
-- The system shall provide a secure admin login page for supermarket staff
-- Admins must authenticate using a username and password
-- Only authenticated admins are allowed access to admin-only features
-- Unauthorized users shall be denied access to admin pages
-
-To access the admin system, enter the link in a browser: 
-
-http://<Raspberry_Pi_IP> <br>
-e.g: http://192.168.0.100 (Admin system and raspberrypi must be in the same wifi to be able to connect) 
-#### Product Management (CRUD)
-- The system shall allow admins to **create new products** in the central database
-  - Required product attributes: 
-   - Product Name
-   - Price
-   - Stock Quantity 
-   - Product Image
-- The system shall allow admins to view (read) all existing products
-- The system shall allow admins to update product information, including:
-  - Price
-  - Stock Quantity
-- The system shall allow admins to delete products
-  - Deletion shall be restricted if the product is linked to an active transaction
-
-#### System Integration
-- Any changes made by admins shall be **reflected immediately** across:
-  - In-store self-checkout system
-  - Online web application
--The system shall ensure price and stock consistency across all platforms 
-  
-#### In-Store Purchases
-- Each product has a **10-digit unique barcode**
-- Camera scans product barcode
-- System retrieves product details from database
-- LCD displays:
-  - Product name
-  - Product price
-  - Cumulative total
-- Supports multiple item scans per transaction
-
-#### Online Purchases
-- Customers can purchase via:
-  - Web Application
-- Customers can choose:
-  - Store pickup
-  - Home delivery (additional $4.00 fee)
-- #### Store pickup
-  - QR code generated after successful online payment
-  - QR code is used for item collection at supermarket
-- #### Home delivery 
-  - Customer required to input their address 
-  - Goods will be sent to their inputted address
-
-#### Payment Modes
-- ATM payment via numeric keypad (PIN-based)
-- PayWave payment via RFID card reader
+| 🏪 In-store kiosk (Raspberry Pi) | 🌐 Online store | 🛠️ Admin dashboard |
+|---|---|---|
+| Camera barcode scanning | Browse products and add to cart | Secure staff login |
+| LCD shows item, price and running total | Store pickup with QR code | Create, edit and delete products |
+| Keypad menu navigation | Home delivery (+$4.00) with address | Product image uploads |
+| ATM PIN payment via keypad | User registration | Search and stock management |
+| RFID PayWave payment | PayNow QR payment | Barcode lookup API |
+| QR scan to collect online orders | | Dockerised for deployment |
 
 ---
 
-### 4.2 Non-Functional Requirements
-- Fast response time (< 2 seconds per scan)
-- High availability during operating hours
-- Secure handling of payment and customer data
-- User-friendly interface
-- Scalable for future features (e.g. loyalty points)
+## 🏗️ Architecture
+
+```
+┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐
+│   In-store kiosk     │   │    Online store      │   │   Admin dashboard    │
+│  Raspberry Pi + HAL  │   │  React + Flask API   │   │  React + Flask API   │
+│ camera · LCD · keypad│   │                      │   │  (Docker + Nginx)    │
+│       RFID           │   │                      │   │                      │
+└──────────┬───────────┘   └──────────┬───────────┘   └──────────┬───────────┘
+           │                          │                          │
+           └──────────────────────────┼──────────────────────────┘
+                                      ▼
+                        ┌───────────────────────────┐
+                        │   MySQL database (cloud)  │
+                        │ products · transactions · │
+                        │   transaction_items ·     │
+                        │          users            │
+                        └───────────────────────────┘
+```
+
+<details>
+<summary><b>More diagrams</b></summary>
+
+<br>
+
+**Application layer**
+<img src="Images/Application.png" alt="Application layer" width="720">
+
+**Hardware layer**
+<img src="Images/Hardware.png" alt="Hardware layer" width="720">
+
+**Use cases**
+<img src="Images/Usecase.png" alt="Use case diagram" width="720">
+
+**In-store purchase flow**
+<img src="Images/Instore.png" alt="In-store flow chart" width="720">
+
+**Overall system flow**
+<img src="Images/Generalflow.png" alt="General flow chart" width="720">
+
+</details>
 
 ---
 
-## 5. System Architecture
+## 🧰 Tech Stack
 
-### 5.1 High-Level Architecture
-The system follows a **client-server architecture** with centralized data management.
-
-![System Architecture](Images/System.png)
-
----
-
-### 5.2 Software Components
-![Application Layer](Images/Application.png)
-
-![Hardware Layer](Images/Hardware.png)
-- **Frontend**
-  - In-store LCD UI
-  - Web application
-  - Mobile application
-- **Backend**
-  - Product management
-  - Transaction handling
-  - Payment processing
-  - QR code generation
-- **Database**
-  - Product details
-  - Prices
-  - Orders
-  - Transactions
+| Layer | Technology |
+|---|---|
+| Kiosk | Python, Raspberry Pi, Picamera2, OpenCV, pyzbar, course HAL library |
+| Web frontends | React 19, Vite, Lucide icons |
+| Backend APIs | Flask, Flask-CORS |
+| Database | MySQL (hosted on Railway) |
+| Deployment | Docker, Docker Compose, Nginx |
+| Testing | pytest |
 
 ---
 
-## 6. UML Diagrams
+## 📁 Project Structure
 
-### 6.1 Use Case Diagram (Description)
-**Actors**
-- User (In-Store Purchase)
-- User (Online Purchase)
-- Admin (Supermarket Staff)
-
-**Main Use Cases**
-- Scan product
-- View total price
-- Make payment
-- Add products to cart
-- Online Checkout
-- Home Delivery 
-- Store Pickup
-
-![Use Case Diagram](Images/Usecase.png)
-
----
-
-### 6.2 Class Diagram (Description)
-
-**Main Classes**
-- `products`
-  - product_id
-  - barcode
-  - name
-  - price
-  - stock
-  - image 
-  - created_at
-  - updated_at
-- `transactions`
-  - transaction_id
-  - total
-  - created_at
-  - user_id
-- `transaction_items`
-  - id
-  - transaction_id
-  - product_id 
-  - quantity 
-  - price_at_purchase 
-- `users`
-  - user_id
-  - username
-  - password
-  - created_at
-  - address
+```
+├── src/                 # In-store kiosk (Raspberry Pi)
+│   ├── main.py          # Checkout flow, payments, QR pickup
+│   ├── menu.py          # Keypad/LCD menu navigation
+│   ├── barcode_scanner.py
+│   └── hal/             # Hardware abstraction layer (course submodule)
+├── admin-app/           # Staff dashboard
+│   ├── src/             # React frontend
+│   ├── backend/         # Flask REST API
+│   ├── Dockerfile       # Frontend build served by Nginx
+│   └── docker-compose.yml
+├── user-app/            # Customer online store
+│   ├── src/             # React frontend
+│   └── backend/         # Flask API (checkout, register, pickup QR)
+├── Product_Barcodes/    # Printable barcodes for demo products
+├── tests/               # pytest suites for menu and LCD
+├── Images/              # Diagrams used in this README
+└── docs/                # SRS, sprint planning, test report
+```
 
 ---
 
-### 6.3 Flow Chart (In-Store Purchase)
+## 🚀 Getting Started
 
-![Flow Chart](Images/Instore.png)
+### Database
+All three apps read their connection details from environment variables:
 
----
+```bash
+DB_HOST=your-host
+DB_PORT=3306
+DB_USER=your-user
+DB_PASSWORD=your-password
+DB_NAME=your-database
+```
 
-## 7. System Workflow
+### Admin dashboard (Docker)
+```bash
+cd admin-app
+docker compose up -d
+```
+Open `http://<Raspberry_Pi_IP>` in a browser on the same Wi-Fi network as the Pi.
 
-![General Flow Chart](Images/Generalflow.png)
+### Customer store
+```bash
+cd user-app
+npm install && npm run dev       # frontend
+python backend/app.py            # backend
+```
 
-### In-Store Checkout
-1. Customer scans product barcode
-2. System retrieves product details
-3. LCD displays product and total price
-4. Customer selects payment method
-5. Payment is processed
-6. Receipt is generated
+### In-store kiosk
+Runs on a Raspberry Pi with the course HAL board (camera, LCD, keypad, RFID reader).
+```bash
+cd src
+python main.py
+```
 
-### Online Purchase
-1. Customer browses products online
-2. Items added to cart
-3. Payment completed
-4. QR code generated
-5. Customer collects items or receives delivery
-
----
-
-## 8. Technologies Used (Proposed)
-- Frontend: HTML, CSS, JavaScript
-- Backend: Python (Flask) / Node.js
-- Database: MySQL
-- Hardware:
-  - Camera for barcode scanning
-  - LCD display
-  - Numeric keypad
-  - RFID card reader
-
----
-
-## 9. Usage
-- Launch in-store system for self-checkout
-- Access web/mobile app for online purchases
-- Follow on-screen instructions to complete checkout
-- Present QR code for item collection if applicable
+### Tests
+```bash
+pytest tests/
+```
 
 ---
 
-## 10. Future Enhancements
-- Loyalty reward system
-- Mobile wallet integration
-- AI-based product recognition
-- Receipt-less checkout
-- Multi-language support
+## 🗄️ Data Model
 
+| Table | Key fields |
+|---|---|
+| `products` | product_id, barcode (10-digit), name, price, stock, image |
+| `transactions` | transaction_id, user_id, total, created_at |
+| `transaction_items` | transaction_id, product_id, quantity, price_at_purchase |
+| `users` | user_id, username, password, address |
 
+---
 
+## 👨‍💻 My Contributions — Yip Kai
+
+I was the repository maintainer and built the data and admin side of the system:
+
+- **Database design.** Designed the MySQL schema, then iterated from a first version with inventory counting to a second version with delete support.
+- **Admin dashboard.** Built the React + Flask app end to end: staff login, a REST API for product CRUD, image uploads, search and stock management, and a barcode lookup endpoint used by the kiosk.
+- **Product barcodes.** Assigned 10-digit barcode IDs and generated printable barcode images for the demo products.
+- **Kiosk navigation.** Reworked the in-store flow so customers can go back between steps.
+- **Docker deployment.** Containerised the admin app with a multi-stage build served by Nginx, plus Docker Compose.
+- **Documentation and repo management.** Wrote the project documentation and diagrams, and reviewed and merged pull requests from the team.
+
+---
+
+## 🤝 Team
+
+| Member | Main contributions |
+|---|---|
+| **Yip Kai** | Database, admin dashboard, Docker, documentation |
+| **Moses Kong** | Kiosk menu navigation, camera barcode scanning, QR pickup verification, RFID PayWave, pytest suites |
+| **Yap Jun Xiang** | Customer online store, pickup and PayNow QR generation, delivery address checkout |
+
+Hardware abstraction layer and project template provided by the ET0735 teaching team.
+
+---
+
+## 🔮 Future Improvements
+
+- Loyalty rewards and mobile wallet support
+- AI-based product recognition instead of barcodes
+- Digital receipts
+- Multi-language interface
