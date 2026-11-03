@@ -5,7 +5,7 @@ services:
     image: YOUR_USERNAME/supermarket-backend:latest
     container_name: supermarket-backend
     environment:
-      DB_HOST: metro.proxy.rlwy.net
+      DB_HOST: YOUR_DB_HOST
       DB_PORT: 48897
       DB_USER: root
       DB_PASSWORD: YOUR_RAILWAY_PASSWORD

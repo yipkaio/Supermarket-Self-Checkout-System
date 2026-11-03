@@ -1,3 +1,4 @@
+import os
 import time
 from threading import Thread
 import queue
@@ -23,11 +24,13 @@ from barcode_scanner import BarcodeScanner
 # ==============================
 # DATABASE CONFIG
 # ==============================
-DB_HOST = "metro.proxy.rlwy.net"
-DB_PORT = 48897
-DB_USER = "root"
-DB_PASS = "YOdvGwlAhmzIWuoFjPnrYddwuGdqfFwm"
-DB_NAME = "railway"
+# Connection details come from environment variables (see Readme.md).
+# Never commit real credentials to this repository.
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_USER = os.getenv("DB_USER", "")
+DB_PASS = os.getenv("DB_PASSWORD", "")
+DB_NAME = os.getenv("DB_NAME", "")
 BARCODE_LEN = 10
 
 # ==============================
